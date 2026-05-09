@@ -9,6 +9,7 @@ ensure_repo_root_on_path()
 
 from app.core.config import ALLOWED_ORIGINS, DISCLAIMER, SERVICE_NAME  # noqa: E402
 from app.models.schemas import (  # noqa: E402
+    AnomalyFlag,
     ExplainRequest,
     ExplainResponse,
     GeminiTestResponse,
@@ -25,6 +26,7 @@ from app.services.kap_service import (  # noqa: E402
     resolve_company,
 )
 from app.services.summarizer_service import explain_disclosures  # noqa: E402
+from kap_okuryazar.text_utils import detect_anomalies  # noqa: E402
 
 app = FastAPI(title="KAP Okuryazar API", version="0.1.0")
 
@@ -88,10 +90,16 @@ def explain(
         result = explain_disclosures(
             company, disclosures, request.mode, api_key=x_gemini_api_key
         )
+        anomalies_raw = detect_anomalies(disclosures)
+        anomalies = [
+            AnomalyFlag(icon=icon, title=title, description=description)
+            for icon, title, description in anomalies_raw
+        ]
         return ExplainResponse(
             company=company.name,
             summary=result["summary"],
             notifications=[Notification(**item) for item in result["notifications"]],
+            anomalies=anomalies,
             source=source,
             disclaimer=DISCLAIMER,
         )

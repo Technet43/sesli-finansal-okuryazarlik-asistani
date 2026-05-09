@@ -28,10 +28,17 @@ export type Notification = {
   category?: string;
 };
 
+export type AnomalyFlag = {
+  icon: string;
+  title: string;
+  description: string;
+};
+
 export type ExplainResponse = {
   company: string;
   summary: string;
   notifications: Notification[];
+  anomalies: AnomalyFlag[];
   source: "kap" | "demo" | string;
   disclaimer: string;
 };

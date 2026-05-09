@@ -19,10 +19,17 @@ class Notification(BaseModel):
     category: str | None = None
 
 
+class AnomalyFlag(BaseModel):
+    icon: str
+    title: str
+    description: str
+
+
 class ExplainResponse(BaseModel):
     company: str
     summary: str
     notifications: list[Notification]
+    anomalies: list[AnomalyFlag]
     source: str
     disclaimer: str
 

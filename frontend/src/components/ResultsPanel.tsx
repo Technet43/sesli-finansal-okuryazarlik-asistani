@@ -75,7 +75,28 @@ export function ResultsPanel({ result, loading, error }: ResultsPanelProps) {
         {result.summary}
       </p>
 
-      <div className="mt-7 grid gap-3">
+      {result.anomalies && result.anomalies.length > 0 ? (
+        <div className="mt-7 space-y-3">
+          {result.anomalies.map((flag) => (
+            <div
+              key={flag.title}
+              className="rounded-2xl border border-amber-200/70 bg-amber-50/80 p-4 shadow-glass-soft backdrop-blur"
+            >
+              <div className="flex items-start gap-3">
+                <span className="text-xl leading-none">{flag.icon}</span>
+                <div className="min-w-0 flex-1">
+                  <h4 className="font-semibold text-amber-900">{flag.title}</h4>
+                  <p className="mt-1 text-sm leading-5 text-amber-800">
+                    {flag.description}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      <div className={`${result.anomalies && result.anomalies.length > 0 ? "mt-6" : "mt-7"} grid gap-3`}>
         {result.notifications.map((item, index) => (
           <article
             key={`${item.date}-${index}`}
