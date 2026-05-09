@@ -14,6 +14,20 @@ Türkiye'deki şirketlerin KAP bildirimlerini sade Türkçe ile anlatan finansal
 
 KAP veri çekme, Gemini sadeleştirme ve güvenlik (yatırım tavsiyesi dilini temizleme) tamamen Python tarafında. Frontend yalnızca API çağırır; API key frontend koduna gömülmez.
 
+## Hızlı başlangıç (Windows, tek tık)
+
+1. Depoyu indir:
+   ```powershell
+   git clone https://github.com/Technet43/sesli-finansal-okuryazarlik-asistani.git
+   cd sesli-finansal-okuryazarlik-asistani
+   git checkout claude/modernize-ui-frontend-rHs29
+   ```
+2. `start.bat` dosyasına **çift tıkla**.
+
+Script eksik araçları (Git, Python, Node.js) `winget` ile kurmayı dener, `.env` dosyalarını oluşturur, paketleri yükler, backend (`:8000`) ve frontend (`:3000`) pencerelerini ayrı ayrı başlatır ve tarayıcıda `http://localhost:3000` adresini açar.
+
+Kapatmak için iki PowerShell penceresinde de `Ctrl+C`.
+
 ## Ortam değişkenleri
 
 `.env` dosyaları repoya commitlenmez (`.gitignore` koruma altında). Örnekler:
