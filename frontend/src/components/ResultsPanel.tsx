@@ -1,5 +1,19 @@
-import { AlertCircle, ExternalLink, FileText, Loader2, TrendingUp } from "lucide-react";
+"use client";
+
+import { useCallback } from "react";
+import {
+  AlertCircle,
+  ExternalLink,
+  FileText,
+  Loader2,
+  Pause,
+  Play,
+  Square,
+  TrendingUp,
+  Volume2,
+} from "lucide-react";
 import type { ExplainResponse } from "@/lib/types";
+import { useTextToSpeech } from "@/lib/useTextToSpeech";
 import { Badge } from "@/components/ui/badge";
 import { GlassCard } from "./GlassCard";
 
@@ -10,6 +24,14 @@ type ResultsPanelProps = {
 };
 
 export function ResultsPanel({ result, loading, error }: ResultsPanelProps) {
+  const tts = useTextToSpeech("tr-TR");
+
+  const handleSpeak = useCallback(() => {
+    if (result) {
+      tts.speak(result.summary);
+    }
+  }, [result, tts]);
+
   if (loading) {
     return (
       <GlassCard className="mx-auto mt-10 w-full max-w-4xl p-7 animate-fade-in">
@@ -68,7 +90,47 @@ export function ResultsPanel({ result, loading, error }: ResultsPanelProps) {
             {result.company}
           </h2>
         </div>
-        <Badge variant={sourceVariant}>{sourceLabel}</Badge>
+        <div className="flex items-center gap-2">
+          {tts.isSupported && (
+            <button
+              type="button"
+              onClick={
+                tts.isSpeaking
+                  ? tts.isPaused
+                    ? tts.resume
+                    : tts.pause
+                  : handleSpeak
+              }
+              aria-label={
+                tts.isSpeaking
+                  ? tts.isPaused
+                    ? "Okumaya devam et"
+                    : "Okumayı duraklat"
+                  : "Metni sesli oku"
+              }
+              className="grid h-9 w-9 place-items-center rounded-lg bg-white/70 text-iris-indigo shadow-glass-soft transition hover:bg-white"
+            >
+              {tts.isSpeaking && !tts.isPaused ? (
+                <Pause className="h-4 w-4" aria-hidden />
+              ) : tts.isSpeaking && tts.isPaused ? (
+                <Play className="h-4 w-4" aria-hidden />
+              ) : (
+                <Volume2 className="h-4 w-4" aria-hidden />
+              )}
+            </button>
+          )}
+          {tts.isSpeaking && (
+            <button
+              type="button"
+              onClick={tts.stop}
+              aria-label="Okumayı durdur"
+              className="grid h-9 w-9 place-items-center rounded-lg bg-white/70 text-rose-500 shadow-glass-soft transition hover:bg-white"
+            >
+              <Square className="h-4 w-4" aria-hidden />
+            </button>
+          )}
+          <Badge variant={sourceVariant}>{sourceLabel}</Badge>
+        </div>
       </header>
 
       <div className="mt-6 text-base leading-7 text-ink-soft sm:text-lg">
