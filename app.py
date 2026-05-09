@@ -1912,35 +1912,58 @@ def render_visual_analysis_tab(tone: str) -> None:
 def render_live_watch(company: CompanyMatch, days: int, limit: int) -> None:
     st.markdown("### 🔔 Canlı izleme")
     st.caption(
-        f"{company.name} için her 60 saniyede bir KAP'ı tarar. Yeni bildirim geldiğinde toast bildirimi alırsın."
+        f"{company.name} için KAP'taki son bildirimi kontrol eder. Demo sırasında sekmeden atmayacak şekilde güvenli modda çalışır."
     )
 
-    enabled = st.toggle("Canlı izlemeyi aç", key=f"live_{company.oid}", value=False)
+    enabled_key = f"live_{company.oid}"
+    seen_key = f"_last_seen_{company.oid}"
+    enabled = st.toggle("Canlı izlemeyi aç", key=enabled_key, value=False)
     if not enabled:
-        st.info("Anahtarı aç ve bu sekmede kal — yeni bildirim geldiğinde haberin olur.")
+        st.info("Anahtarı açınca son KAP bildirimi kaydedilir. Sonra 'Şimdi kontrol et' ile yeni bildirim var mı bakılır.")
         return
 
-    @st.fragment(run_every=60)
-    def _watch():
-        try:
+    try:
+        with st.spinner("KAP son bildirimi kontrol ediliyor..."):
             current = fetch_disclosures(company.oid, days, limit)
-        except Exception as exc:
-            st.warning(f"KAP'a ulaşılamadı: {exc}")
-            return
-        if not current:
-            return
-        latest_index = current[0].get("index")
-        seen_key = f"_last_seen_{company.oid}"
-        last_seen = st.session_state.get(seen_key)
-        if last_seen and str(last_seen) != str(latest_index):
-            increment_stat("live_alerts")
-            st.toast(f"🔔 Yeni KAP bildirimi: {current[0]['subject'][:80]}", icon="🔔")
-            st.success(f"**Yeni bildirim:** {current[0]['subject']}")
-            st.link_button("KAP'ta aç", current[0]["url"])
-        st.session_state[seen_key] = latest_index
-        st.caption(f"Son kontrol: {current[0]['publish_datetime'][:16]} · son bildirim no: {latest_index}")
+    except Exception as exc:
+        st.warning(f"KAP'a ulaşılamadı: {exc}")
+        return
 
-    _watch()
+    if not current:
+        st.warning("Bu aralıkta izlenecek KAP bildirimi bulunamadı.")
+        return
+
+    latest = current[0]
+    latest_index = latest.get("index")
+    last_seen = st.session_state.get(seen_key)
+
+    if last_seen is None:
+        st.session_state[seen_key] = latest_index
+        st.success("Canlı izleme açıldı. Mevcut son bildirim referans olarak kaydedildi.")
+    elif str(last_seen) != str(latest_index):
+        increment_stat("live_alerts")
+        st.session_state[seen_key] = latest_index
+        st.toast(f"Yeni KAP bildirimi: {latest['subject'][:80]}")
+        st.success(f"Yeni bildirim bulundu: {latest['subject']}")
+        st.link_button("KAP'ta aç", latest["url"])
+    else:
+        st.info("Yeni bildirim yok. Son KAP bildirimi aynı.")
+
+    st.markdown(
+        f"""
+        <div class="source-row">
+            <span class="badge badge-info">Son kontrol</span>
+            <div><strong>{escape(str(latest.get("subject", "Bildirim")))}</strong></div>
+            <div class="muted">{escape(str(latest.get("publish_datetime", "")))}
+            · bildirim no: {escape(str(latest_index))}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.link_button("Son bildirimi KAP'ta aç", latest["url"])
+    if st.button("Şimdi tekrar kontrol et", use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
 
 
 def render_jury_package(company: CompanyMatch, report: dict, disclosures: list[dict]) -> None:
