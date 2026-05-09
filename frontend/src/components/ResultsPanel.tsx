@@ -71,9 +71,16 @@ export function ResultsPanel({ result, loading, error }: ResultsPanelProps) {
         <Badge variant={sourceVariant}>{sourceLabel}</Badge>
       </header>
 
-      <p className="mt-6 text-base leading-7 text-ink-soft sm:text-lg">
-        {result.summary}
-      </p>
+      <div className="mt-6 text-base leading-7 text-ink-soft sm:text-lg">
+        {result.summaryHtml ? (
+          <div
+            className="prose-glossary"
+            dangerouslySetInnerHTML={{ __html: result.summaryHtml }}
+          />
+        ) : (
+          result.summary
+        )}
+      </div>
 
       {result.anomalies && result.anomalies.length > 0 ? (
         <div className="mt-7 space-y-3">

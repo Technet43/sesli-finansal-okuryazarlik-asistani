@@ -42,6 +42,7 @@ export type FinancialNumber = {
 export type ExplainResponse = {
   company: string;
   summary: string;
+  summaryHtml?: string;
   notifications: Notification[];
   anomalies: AnomalyFlag[];
   financialNumbers: FinancialNumber[];

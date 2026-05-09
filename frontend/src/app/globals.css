@@ -160,6 +160,45 @@ body.high-contrast {
   background-size: 200% 100%;
 }
 
+/* Glossary tooltip styles */
+.prose-glossary abbr {
+  border-bottom: 2px dotted rgba(124, 92, 255, 0.5);
+  cursor: help;
+  text-decoration: none;
+  font-weight: 500;
+  position: relative;
+}
+
+.prose-glossary abbr:hover {
+  border-bottom-color: rgba(124, 92, 255, 0.8);
+}
+
+.prose-glossary abbr::after {
+  content: attr(title);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(11, 17, 32, 0.95);
+  color: #f7faff;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  white-space: nowrap;
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.4;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  margin-bottom: 0.5rem;
+  z-index: 10;
+  box-shadow: 0 4px 12px rgba(11, 17, 32, 0.15);
+}
+
+.prose-glossary abbr:hover::after {
+  opacity: 1;
+}
+
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
   *,

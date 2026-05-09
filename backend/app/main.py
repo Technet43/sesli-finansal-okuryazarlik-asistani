@@ -28,6 +28,7 @@ from app.services.kap_service import (  # noqa: E402
 )
 from app.services.summarizer_service import explain_disclosures  # noqa: E402
 from kap_okuryazar.text_utils import (  # noqa: E402
+    apply_glossary,
     detect_anomalies,
     extract_financial_numbers,
 )
@@ -113,6 +114,7 @@ def explain(
         return ExplainResponse(
             company=company.name,
             summary=result["summary"],
+            summaryHtml=apply_glossary(result["summary"]),
             notifications=[Notification(**item) for item in result["notifications"]],
             anomalies=anomalies,
             financialNumbers=financial_numbers,

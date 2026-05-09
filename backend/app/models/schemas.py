@@ -33,6 +33,7 @@ class FinancialNumber(BaseModel):
 class ExplainResponse(BaseModel):
     company: str
     summary: str
+    summaryHtml: str | None = None
     notifications: list[Notification]
     anomalies: list[AnomalyFlag]
     financialNumbers: list[FinancialNumber]
