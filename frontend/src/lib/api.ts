@@ -11,7 +11,16 @@ const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").rep
 );
 const DEFAULT_TIMEOUT_MS = 60_000;
 
-async function request<T>(path: string, init?: RequestInit, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
+function authHeaders(apiKey?: string): Record<string, string> {
+  const key = apiKey?.trim();
+  return key ? { "X-Gemini-Api-Key": key } : {};
+}
+
+async function request<T>(
+  path: string,
+  init?: RequestInit,
+  timeoutMs = DEFAULT_TIMEOUT_MS
+): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -52,22 +61,31 @@ async function request<T>(path: string, init?: RequestInit, timeoutMs = DEFAULT_
   }
 }
 
-export function getStatus(): Promise<SystemStatus> {
-  return request<SystemStatus>("/api/status", { method: "GET" }, 8_000);
+export function getStatus(apiKey?: string): Promise<SystemStatus> {
+  return request<SystemStatus>(
+    "/api/status",
+    { method: "GET", headers: authHeaders(apiKey) },
+    8_000
+  );
 }
 
-export function explainCompany(payload: ExplainRequest): Promise<ExplainResponse> {
+export function explainCompany(
+  payload: ExplainRequest,
+  apiKey?: string
+): Promise<ExplainResponse> {
   return request<ExplainResponse>("/api/explain", {
     method: "POST",
+    headers: authHeaders(apiKey),
     body: JSON.stringify(payload),
   });
 }
 
-export function testGemini(): Promise<GeminiTestResponse> {
+export function testGemini(apiKey?: string): Promise<GeminiTestResponse> {
   return request<GeminiTestResponse>(
     "/api/test-gemini",
     {
       method: "POST",
+      headers: authHeaders(apiKey),
       body: JSON.stringify({}),
     },
     20_000

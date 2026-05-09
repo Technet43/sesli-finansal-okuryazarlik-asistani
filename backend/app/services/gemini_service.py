@@ -15,27 +15,27 @@ def _load_genai():
         return None
 
 
-def get_client():
-    api_key = os.getenv("GEMINI_API_KEY", "").strip()
-    if not api_key:
+def get_client(api_key: str | None = None):
+    key = (api_key or os.getenv("GEMINI_API_KEY", "")).strip()
+    if not key:
         return None
     genai = _load_genai()
     if genai is None:
         return None
     try:
-        return genai.Client(api_key=api_key)
+        return genai.Client(api_key=key)
     except BaseException:
         return None
 
 
-def test_connection() -> tuple[bool, str]:
-    api_key = os.getenv("GEMINI_API_KEY", "").strip()
-    if not api_key:
-        return False, "GEMINI_API_KEY bulunamadı. .env dosyasına ekle."
+def test_connection(api_key: str | None = None) -> tuple[bool, str]:
+    key = (api_key or os.getenv("GEMINI_API_KEY", "")).strip()
+    if not key:
+        return False, "GEMINI_API_KEY bulunamadı. Sidebar'a yapıştır veya .env'e ekle."
     if _load_genai() is None:
         return False, "google-genai paketi yüklenemedi."
 
-    client = get_client()
+    client = get_client(api_key=key)
     if client is None:
         return False, "Gemini istemcisi başlatılamadı."
 

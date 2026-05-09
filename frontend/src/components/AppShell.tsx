@@ -16,6 +16,7 @@ const DEFAULT_HISTORY = [
   "BİM",
 ];
 const HISTORY_KEY = "kap-okuryazar-history";
+const GEMINI_KEY_STORAGE = "kap-okuryazar-gemini-key";
 const HISTORY_LIMIT = 8;
 
 export function AppShell() {
@@ -25,6 +26,7 @@ export function AppShell() {
   const [demoMode, setDemoMode] = useState(false);
   const [highContrast, setHighContrast] = useState(false);
   const [mode, setMode] = useState<ExplanationMode>("simple");
+  const [geminiKey, setGeminiKeyState] = useState("");
   const [geminiTesting, setGeminiTesting] = useState(false);
   const [geminiMessage, setGeminiMessage] = useState("");
   const [status, setStatus] = useState<SystemStatus | null>(null);
@@ -32,6 +34,19 @@ export function AppShell() {
   const [result, setResult] = useState<ExplainResponse | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  function setGeminiKey(value: string) {
+    setGeminiKeyState(value);
+    try {
+      if (value) {
+        window.sessionStorage.setItem(GEMINI_KEY_STORAGE, value);
+      } else {
+        window.sessionStorage.removeItem(GEMINI_KEY_STORAGE);
+      }
+    } catch {
+      // ignore storage errors
+    }
+  }
 
   useEffect(() => {
     try {
@@ -44,6 +59,14 @@ export function AppShell() {
       }
     } catch {
       setHistory(DEFAULT_HISTORY);
+    }
+    try {
+      const savedKey = window.sessionStorage.getItem(GEMINI_KEY_STORAGE);
+      if (savedKey) {
+        setGeminiKeyState(savedKey);
+      }
+    } catch {
+      // ignore
     }
     void getStatus()
       .then(setStatus)
@@ -81,13 +104,16 @@ export function AppShell() {
     setResult(null);
     rememberSearch(clean);
     try {
-      const response = await explainCompany({
-        company: clean,
-        days,
-        summaryCount,
-        mode,
-        useDemo: demoMode,
-      });
+      const response = await explainCompany(
+        {
+          company: clean,
+          days,
+          summaryCount,
+          mode,
+          useDemo: demoMode,
+        },
+        geminiKey
+      );
       setResult(response);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Beklenmeyen bir hata oluştu.");
@@ -100,9 +126,9 @@ export function AppShell() {
     setGeminiTesting(true);
     setGeminiMessage("Test ediliyor...");
     try {
-      const response = await testGemini();
+      const response = await testGemini(geminiKey);
       setGeminiMessage(response.message);
-      void getStatus()
+      void getStatus(geminiKey)
         .then(setStatus)
         .catch(() => undefined);
     } catch (err) {
@@ -129,6 +155,8 @@ export function AppShell() {
             setSummaryCount={setSummaryCount}
             mode={mode}
             setMode={setMode}
+            geminiKey={geminiKey}
+            setGeminiKey={setGeminiKey}
             onTestGemini={handleTestGemini}
             geminiTesting={geminiTesting}
             geminiMessage={geminiMessage}

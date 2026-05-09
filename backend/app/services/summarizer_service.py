@@ -56,8 +56,13 @@ def fallback_summary(company: CompanyMatch, disclosures: list[dict]) -> dict:
     return {"summary": clean_advice_language(summary), "notifications": notifications}
 
 
-def explain_disclosures(company: CompanyMatch, disclosures: list[dict], mode: str) -> dict:
-    client = get_client()
+def explain_disclosures(
+    company: CompanyMatch,
+    disclosures: list[dict],
+    mode: str,
+    api_key: str | None = None,
+) -> dict:
+    client = get_client(api_key=api_key)
     if client is None:
         return fallback_summary(company, disclosures)
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.bootstrap import ensure_repo_root_on_path
@@ -43,8 +43,10 @@ def health() -> HealthResponse:
 
 
 @app.get("/api/status", response_model=StatusResponse)
-def status() -> StatusResponse:
-    gemini_connected = get_client() is not None
+def status(
+    x_gemini_api_key: str | None = Header(default=None, alias="X-Gemini-Api-Key"),
+) -> StatusResponse:
+    gemini_connected = get_client(api_key=x_gemini_api_key) is not None
     return StatusResponse(
         kap=StatusItem(status="live", label="Canlı veri kaynağı"),
         gemini=StatusItem(
@@ -56,13 +58,18 @@ def status() -> StatusResponse:
 
 
 @app.post("/api/test-gemini", response_model=GeminiTestResponse)
-def test_gemini() -> GeminiTestResponse:
-    ok, message = test_connection()
+def test_gemini(
+    x_gemini_api_key: str | None = Header(default=None, alias="X-Gemini-Api-Key"),
+) -> GeminiTestResponse:
+    ok, message = test_connection(api_key=x_gemini_api_key)
     return GeminiTestResponse(ok=ok, message=message)
 
 
 @app.post("/api/explain", response_model=ExplainResponse)
-def explain(request: ExplainRequest) -> ExplainResponse:
+def explain(
+    request: ExplainRequest,
+    x_gemini_api_key: str | None = Header(default=None, alias="X-Gemini-Api-Key"),
+) -> ExplainResponse:
     try:
         if request.useDemo:
             company = demo_company()
@@ -78,7 +85,9 @@ def explain(request: ExplainRequest) -> ExplainResponse:
             disclosures = fetch_disclosures(company.oid, request.days, request.summaryCount)
             source = "kap"
 
-        result = explain_disclosures(company, disclosures, request.mode)
+        result = explain_disclosures(
+            company, disclosures, request.mode, api_key=x_gemini_api_key
+        )
         return ExplainResponse(
             company=company.name,
             summary=result["summary"],

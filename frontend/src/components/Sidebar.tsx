@@ -1,7 +1,7 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { Loader2, Lock, Moon, ShieldCheck, Sparkles } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { Eye, EyeOff, Loader2, Lock, Moon, ShieldCheck, Sparkles } from "lucide-react";
 import type { ExplanationMode, SystemStatus } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,6 +26,8 @@ type SidebarProps = {
   setSummaryCount: (value: number) => void;
   mode: ExplanationMode;
   setMode: (value: ExplanationMode) => void;
+  geminiKey: string;
+  setGeminiKey: (value: string) => void;
   onTestGemini: () => void;
   geminiTesting: boolean;
   geminiMessage: string;
@@ -33,6 +35,7 @@ type SidebarProps = {
 };
 
 export function Sidebar(props: SidebarProps) {
+  const [showKey, setShowKey] = useState(false);
   return (
     <aside
       aria-label="Ayarlar"
@@ -99,16 +102,38 @@ export function Sidebar(props: SidebarProps) {
       </div>
 
       <div className="space-y-3">
-        <div className="space-y-1.5">
+        <label className="block space-y-1.5" htmlFor="gemini-api-key">
           <span className="text-sm font-semibold text-ink">Gemini API</span>
-          <p className="text-xs leading-5 text-ink-muted">
-            Anahtar sunucu tarafında <code className="rounded bg-white/70 px-1 py-0.5 text-[11px] text-ink">.env</code>
-            dosyasından okunur. Frontend&apos;e yazılmaz.
-          </p>
-        </div>
-        <div className="flex h-11 items-center gap-2 rounded-xl border border-white/70 bg-white/55 px-3 text-xs text-ink-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]">
-          <Lock className="h-4 w-4 text-ink-muted" aria-hidden />
-          GEMINI_API_KEY .env üzerinden
+          <span className="block text-xs leading-5 text-ink-muted">
+            Buraya yapıştırırsan bu oturumda kullanılır. Boş bırakırsan sunucu
+            <code className="mx-1 rounded bg-white/70 px-1 py-0.5 text-[11px] text-ink">.env</code>
+            dosyasındaki anahtar kullanılır.
+          </span>
+        </label>
+        <div className="flex h-11 items-center gap-2 rounded-xl border border-white/70 bg-white/70 px-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)] focus-within:ring-2 focus-within:ring-iris-indigo/60">
+          <Lock className="h-4 w-4 shrink-0 text-ink-muted" aria-hidden />
+          <input
+            id="gemini-api-key"
+            type={showKey ? "text" : "password"}
+            value={props.geminiKey}
+            onChange={(event) => props.setGeminiKey(event.target.value)}
+            placeholder="AIza..."
+            autoComplete="off"
+            spellCheck={false}
+            className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-slate-400"
+          />
+          <button
+            type="button"
+            onClick={() => setShowKey((value) => !value)}
+            aria-label={showKey ? "Anahtarı gizle" : "Anahtarı göster"}
+            className="grid h-7 w-7 place-items-center rounded-md text-ink-muted transition hover:bg-white/70"
+          >
+            {showKey ? (
+              <EyeOff className="h-4 w-4" aria-hidden />
+            ) : (
+              <Eye className="h-4 w-4" aria-hidden />
+            )}
+          </button>
         </div>
         <Button
           type="button"
