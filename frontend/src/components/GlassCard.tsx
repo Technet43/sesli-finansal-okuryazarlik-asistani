@@ -1,11 +1,27 @@
-import type { ReactNode } from "react";
+import type { HTMLAttributes, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
-type GlassCardProps = {
+type GlassCardProps = HTMLAttributes<HTMLDivElement> & {
   children: ReactNode;
-  className?: string;
+  tone?: "default" | "soft";
 };
 
-export function GlassCard({ children, className }: GlassCardProps) {
-  return <div className={cn("glass-surface rounded-lg", className)}>{children}</div>;
+export function GlassCard({
+  children,
+  className,
+  tone = "default",
+  ...props
+}: GlassCardProps) {
+  return (
+    <div
+      className={cn(
+        tone === "soft" ? "glass-soft" : "glass-surface",
+        "rounded-2xl",
+        className
+      )}
+      {...props}
+    >
+      {children}
+    </div>
+  );
 }

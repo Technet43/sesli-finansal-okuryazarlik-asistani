@@ -1,6 +1,18 @@
+"use client";
+
 import type { ReactNode } from "react";
-import { Lock, Moon, ShieldCheck, Sparkles } from "lucide-react";
-import type { SystemStatus } from "@/lib/types";
+import { Loader2, Lock, Moon, ShieldCheck, Sparkles } from "lucide-react";
+import type { ExplanationMode, SystemStatus } from "@/lib/types";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import { StatusCards } from "./StatusCards";
 
 type SidebarProps = {
@@ -12,91 +24,118 @@ type SidebarProps = {
   setDays: (value: number) => void;
   summaryCount: number;
   setSummaryCount: (value: number) => void;
-  mode: "simple" | "professional" | "technical";
-  setMode: (value: "simple" | "professional" | "technical") => void;
-  geminiKey: string;
-  setGeminiKey: (value: string) => void;
+  mode: ExplanationMode;
+  setMode: (value: ExplanationMode) => void;
   onTestGemini: () => void;
+  geminiTesting: boolean;
   geminiMessage: string;
   status: SystemStatus | null;
 };
 
 export function Sidebar(props: SidebarProps) {
   return (
-    <aside className="glass-surface rounded-lg p-6 lg:w-[320px]">
-      <h2 className="text-base font-semibold text-slate-950">Ayarlar</h2>
-      <div className="mt-6 space-y-6">
+    <aside
+      aria-label="Ayarlar"
+      className="glass-surface flex flex-col gap-7 rounded-2xl p-6 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto"
+    >
+      <div className="flex items-center justify-between">
+        <h2 className="text-base font-semibold tracking-tight text-ink">Ayarlar</h2>
+      </div>
+
+      <div className="space-y-5">
         <ToggleRow
-          icon={<Moon className="h-4 w-4" />}
+          icon={<Moon className="h-4 w-4 text-ink-muted" aria-hidden />}
           label="Demo modu (offline)"
+          description="İnternetsiz örnek bildirimlerle dener."
           checked={props.demoMode}
           onChange={props.setDemoMode}
         />
         <ToggleRow
-          icon={<ShieldCheck className="h-4 w-4" />}
+          icon={<ShieldCheck className="h-4 w-4 text-ink-muted" aria-hidden />}
           label="Yüksek kontrast"
+          description="Erişilebilirlik için sade görünüm."
           checked={props.highContrast}
           onChange={props.setHighContrast}
         />
-
-        <RangeControl
-          label="Kaç günlük KAP bildirimi?"
-          value={props.days}
-          min={1}
-          max={365}
-          suffix="gün"
-          onChange={props.setDays}
-        />
-        <RangeControl
-          label="Kaç bildirim özetlensin?"
-          value={props.summaryCount}
-          min={1}
-          max={10}
-          onChange={props.setSummaryCount}
-        />
-
-        <label className="block space-y-2">
-          <span className="text-sm font-semibold text-slate-900">Anlatım modu</span>
-          <select
-            value={props.mode}
-            onChange={(event) => props.setMode(event.target.value as SidebarProps["mode"])}
-            className="h-11 w-full rounded-lg border border-slate-200 bg-white/68 px-3 text-sm shadow-inner"
-          >
-            <option value="simple">Anne-babaya anlatır gibi (sade)</option>
-            <option value="professional">Kısa profesyonel özet</option>
-            <option value="technical">Detaylı teknik açıklama</option>
-          </select>
-        </label>
-
-        <div className="space-y-3">
-          <label className="block space-y-2">
-            <span className="text-sm font-semibold text-slate-900">Gemini API</span>
-            <span className="text-xs text-slate-600">Gemini için API key&apos;i buraya gir.</span>
-            <span className="flex h-11 items-center gap-2 rounded-lg border border-slate-200 bg-white/68 px-3 shadow-inner">
-              <Lock className="h-4 w-4 text-slate-500" />
-              <input
-                aria-label="Gemini API key"
-                type="password"
-                value={props.geminiKey}
-                onChange={(event) => props.setGeminiKey(event.target.value)}
-                placeholder="API key"
-                className="min-w-0 flex-1 bg-transparent text-sm outline-none"
-              />
-            </span>
-          </label>
-          <button
-            type="button"
-            onClick={props.onTestGemini}
-            className="flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-white/70 bg-white/58 text-sm font-semibold text-indigo-700 shadow-sm transition hover:-translate-y-0.5 hover:shadow-glow"
-          >
-            <Sparkles className="h-4 w-4" />
-            Gemini bağlantısını test et
-          </button>
-          {props.geminiMessage ? <p className="text-xs text-slate-600">{props.geminiMessage}</p> : null}
-        </div>
-
-        <StatusCards status={props.status} />
       </div>
+
+      <RangeControl
+        label="Kaç günlük KAP bildirimi?"
+        value={props.days}
+        min={1}
+        max={365}
+        step={1}
+        suffix="gün"
+        ticks={[1, 90, 180, 365]}
+        onChange={props.setDays}
+      />
+      <RangeControl
+        label="Kaç bildirim özetlensin?"
+        value={props.summaryCount}
+        min={1}
+        max={10}
+        step={1}
+        ticks={[1, 4, 10]}
+        onChange={props.setSummaryCount}
+      />
+
+      <div className="space-y-2">
+        <span id="mode-label" className="text-sm font-semibold text-ink">
+          Anlatım modu
+        </span>
+        <Select
+          value={props.mode}
+          onValueChange={(value) => props.setMode(value as ExplanationMode)}
+        >
+          <SelectTrigger aria-labelledby="mode-label">
+            <SelectValue placeholder="Seçim yap" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="simple">Anne-babaya anlatır gibi (sade)</SelectItem>
+            <SelectItem value="professional">Kısa profesyonel özet</SelectItem>
+            <SelectItem value="technical">Detaylı teknik açıklama</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-3">
+        <div className="space-y-1.5">
+          <span className="text-sm font-semibold text-ink">Gemini API</span>
+          <p className="text-xs leading-5 text-ink-muted">
+            Anahtar sunucu tarafında <code className="rounded bg-white/70 px-1 py-0.5 text-[11px] text-ink">.env</code>
+            dosyasından okunur. Frontend&apos;e yazılmaz.
+          </p>
+        </div>
+        <div className="flex h-11 items-center gap-2 rounded-xl border border-white/70 bg-white/55 px-3 text-xs text-ink-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]">
+          <Lock className="h-4 w-4 text-ink-muted" aria-hidden />
+          GEMINI_API_KEY .env üzerinden
+        </div>
+        <Button
+          type="button"
+          variant="glass"
+          className="w-full justify-center"
+          onClick={props.onTestGemini}
+          disabled={props.geminiTesting}
+        >
+          {props.geminiTesting ? (
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+          ) : (
+            <Sparkles className="h-4 w-4 text-iris-indigo" aria-hidden />
+          )}
+          Gemini bağlantısını test et
+        </Button>
+        {props.geminiMessage ? (
+          <p
+            role="status"
+            aria-live="polite"
+            className="rounded-lg border border-white/60 bg-white/55 px-3 py-2 text-xs leading-5 text-ink-soft"
+          >
+            {props.geminiMessage}
+          </p>
+        ) : null}
+      </div>
+
+      <StatusCards status={props.status} />
     </aside>
   );
 }
@@ -104,27 +143,28 @@ export function Sidebar(props: SidebarProps) {
 function ToggleRow({
   icon,
   label,
+  description,
   checked,
-  onChange
+  onChange,
 }: {
   icon: ReactNode;
   label: string;
+  description?: string;
   checked: boolean;
   onChange: (value: boolean) => void;
 }) {
   return (
-    <label className="flex items-center justify-between gap-4 text-sm font-medium text-slate-800">
-      <span className="flex items-center gap-3">
-        {icon}
-        {label}
+    <label className="flex cursor-pointer items-start justify-between gap-4 text-sm">
+      <span className="flex items-start gap-3">
+        <span className="mt-0.5">{icon}</span>
+        <span className="flex flex-col">
+          <span className="font-medium text-ink">{label}</span>
+          {description ? (
+            <span className="text-xs text-ink-muted">{description}</span>
+          ) : null}
+        </span>
       </span>
-      <input
-        aria-label={label}
-        type="checkbox"
-        checked={checked}
-        onChange={(event) => onChange(event.target.checked)}
-        className="h-5 w-9 appearance-none rounded-full bg-slate-300 shadow-inner transition checked:bg-indigo-500 before:block before:h-5 before:w-5 before:rounded-full before:bg-white before:shadow before:transition checked:before:translate-x-4"
-      />
+      <Switch checked={checked} onCheckedChange={onChange} aria-label={label} />
     </label>
   );
 }
@@ -134,36 +174,44 @@ function RangeControl({
   value,
   min,
   max,
+  step,
   suffix,
-  onChange
+  ticks,
+  onChange,
 }: {
   label: string;
   value: number;
   min: number;
   max: number;
+  step: number;
   suffix?: string;
+  ticks?: number[];
   onChange: (value: number) => void;
 }) {
   return (
-    <label className="block space-y-3">
-      <span className="flex items-center justify-between text-sm font-semibold text-slate-900">
-        {label}
-        <span>
-          {value} {suffix ?? ""}
+    <div className="space-y-3">
+      <div className="flex items-center justify-between text-sm">
+        <span className="font-semibold text-ink">{label}</span>
+        <span className="font-mono text-xs font-semibold text-iris-indigo">
+          {value}
+          {suffix ? ` ${suffix}` : ""}
         </span>
-      </span>
-      <input
-        type="range"
+      </div>
+      <Slider
         min={min}
         max={max}
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-        className="w-full accent-indigo-500"
+        step={step}
+        value={[value]}
+        onValueChange={(values) => onChange(values[0] ?? min)}
+        aria-label={label}
       />
-      <span className="flex justify-between text-xs text-slate-500">
-        <span>{min}</span>
-        <span>{max}</span>
-      </span>
-    </label>
+      {ticks?.length ? (
+        <div className="flex justify-between text-[11px] text-ink-muted">
+          {ticks.map((tick) => (
+            <span key={tick}>{tick}</span>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }

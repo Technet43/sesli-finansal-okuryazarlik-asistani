@@ -1,14 +1,22 @@
 "use client";
 
-import { MoreVertical, Rocket } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { explainCompany, getStatus, testGemini } from "@/lib/api";
-import type { ExplainResponse, SystemStatus } from "@/lib/types";
+import type { ExplainResponse, ExplanationMode, SystemStatus } from "@/lib/types";
+import { Header } from "./Header";
 import { HeroSearch } from "./HeroSearch";
 import { ResultsPanel } from "./ResultsPanel";
 import { Sidebar } from "./Sidebar";
 
-const DEFAULT_HISTORY = ["Ziraat Bankası", "Koç Holding", "Türk Hava Yolları", "Aselsan", "BİM"];
+const DEFAULT_HISTORY = [
+  "Ziraat Bankası",
+  "Koç Holding",
+  "Türk Hava Yolları",
+  "Aselsan",
+  "BİM",
+];
+const HISTORY_KEY = "kap-okuryazar-history";
+const HISTORY_LIMIT = 8;
 
 export function AppShell() {
   const [company, setCompany] = useState("Ziraat Bankası");
@@ -16,8 +24,8 @@ export function AppShell() {
   const [summaryCount, setSummaryCount] = useState(4);
   const [demoMode, setDemoMode] = useState(false);
   const [highContrast, setHighContrast] = useState(false);
-  const [mode, setMode] = useState<"simple" | "professional" | "technical">("simple");
-  const [geminiKey, setGeminiKey] = useState("");
+  const [mode, setMode] = useState<ExplanationMode>("simple");
+  const [geminiTesting, setGeminiTesting] = useState(false);
   const [geminiMessage, setGeminiMessage] = useState("");
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [history, setHistory] = useState<string[]>(DEFAULT_HISTORY);
@@ -26,15 +34,20 @@ export function AppShell() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem("kap-okuryazar-history");
-    if (saved) {
-      try {
-        setHistory(JSON.parse(saved) as string[]);
-      } catch {
-        setHistory(DEFAULT_HISTORY);
+    try {
+      const saved = window.localStorage.getItem(HISTORY_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved) as string[];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setHistory(parsed);
+        }
       }
+    } catch {
+      setHistory(DEFAULT_HISTORY);
     }
-    void getStatus().then(setStatus).catch(() => setStatus(null));
+    void getStatus()
+      .then(setStatus)
+      .catch(() => setStatus(null));
   }, []);
 
   useEffect(() => {
@@ -46,9 +59,18 @@ export function AppShell() {
   function rememberSearch(value: string) {
     const clean = value.trim();
     if (!clean) return;
-    const next = [clean, ...history.filter((item) => item.toLocaleLowerCase("tr") !== clean.toLocaleLowerCase("tr"))].slice(0, 8);
+    const next = [
+      clean,
+      ...history.filter(
+        (item) => item.toLocaleLowerCase("tr") !== clean.toLocaleLowerCase("tr")
+      ),
+    ].slice(0, HISTORY_LIMIT);
     setHistory(next);
-    window.localStorage.setItem("kap-okuryazar-history", JSON.stringify(next));
+    try {
+      window.localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+    } catch {
+      // ignore quota / private mode errors
+    }
   }
 
   async function handleExplain() {
@@ -64,7 +86,7 @@ export function AppShell() {
         days,
         summaryCount,
         mode,
-        useDemo: demoMode
+        useDemo: demoMode,
       });
       setResult(response);
     } catch (err) {
@@ -75,48 +97,27 @@ export function AppShell() {
   }
 
   async function handleTestGemini() {
+    setGeminiTesting(true);
     setGeminiMessage("Test ediliyor...");
     try {
       const response = await testGemini();
       setGeminiMessage(response.message);
-      void getStatus().then(setStatus);
+      void getStatus()
+        .then(setStatus)
+        .catch(() => undefined);
     } catch (err) {
       setGeminiMessage(err instanceof Error ? err.message : "Gemini testi başarısız.");
+    } finally {
+      setGeminiTesting(false);
     }
   }
 
   return (
-    <main className="min-h-screen p-4 text-slate-950 sm:p-6">
-      <div className="mx-auto max-w-[1500px] rounded-lg border border-white/70 bg-white/30 p-4 shadow-glass backdrop-blur-2xl">
-        <header className="glass-surface flex items-center justify-between rounded-lg px-5 py-4">
-          <div className="flex items-center gap-4">
-            <div className="grid h-12 w-12 place-items-center rounded-lg bg-gradient-to-br from-sky-500 via-indigo-500 to-fuchsia-500 text-xl font-bold text-white shadow-glow">
-              K
-            </div>
-            <div>
-              <p className="text-xl font-semibold text-slate-950">KAP Okuryazar</p>
-              <p className="text-sm text-slate-600">KAP bildirimlerini sadeleştirir</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              className="hidden h-11 items-center gap-2 rounded-lg border border-white/70 bg-white/64 px-4 font-semibold text-slate-900 shadow-sm transition hover:-translate-y-0.5 sm:flex"
-            >
-              <Rocket className="h-4 w-4" />
-              Deploy
-            </button>
-            <button
-              type="button"
-              aria-label="Menü"
-              className="grid h-11 w-11 place-items-center rounded-lg border border-white/70 bg-white/54 text-slate-800 shadow-sm"
-            >
-              <MoreVertical className="h-5 w-5" />
-            </button>
-          </div>
-        </header>
+    <main className="min-h-screen px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
+      <div className="mx-auto flex max-w-[1500px] flex-col gap-6">
+        <Header />
 
-        <div className="mt-5 grid gap-5 lg:grid-cols-[320px_1fr]">
+        <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
           <Sidebar
             demoMode={demoMode}
             setDemoMode={setDemoMode}
@@ -128,23 +129,20 @@ export function AppShell() {
             setSummaryCount={setSummaryCount}
             mode={mode}
             setMode={setMode}
-            geminiKey={geminiKey}
-            setGeminiKey={setGeminiKey}
             onTestGemini={handleTestGemini}
+            geminiTesting={geminiTesting}
             geminiMessage={geminiMessage}
             status={status}
           />
 
-          <div className="rounded-lg px-2 py-8 sm:px-6 lg:py-14">
+          <div className="px-1 pb-12 pt-4 sm:px-4 lg:py-10">
             <HeroSearch
               company={company}
               setCompany={setCompany}
               onSubmit={handleExplain}
               loading={loading}
               history={safeHistory}
-              onHistoryClick={(value) => {
-                setCompany(value);
-              }}
+              onHistoryClick={(value) => setCompany(value)}
             />
             <ResultsPanel result={result} loading={loading} error={error} />
           </div>

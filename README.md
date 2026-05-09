@@ -1,98 +1,64 @@
 # KAP Okuryazar
 
-KAP Okuryazar, Türkiye'deki şirketlerin KAP bildirimlerini sade Türkçe ile anlatan sesli finansal okuryazarlık asistanıdır. Amaç yatırım tavsiyesi vermek değil, resmi açıklamaları herkesin anlayacağı dile çevirmektir.
+Türkiye'deki şirketlerin KAP bildirimlerini sade Türkçe ile anlatan finansal okuryazarlık asistanı. Amaç yatırım tavsiyesi vermek değil, resmi açıklamaları herkesin anlayacağı dile çevirmek.
 
-## Durum
+## Mimarisi
 
-- Eski Streamlit uygulaması korunuyor: `app.py`
-- Ortak Python çekirdeği ayrıldı: `kap_okuryazar/`
-- Yeni FastAPI backend eklendi: `backend/`
-- Yeni Next.js frontend iskeleti eklendi: `frontend/`
+| Katman | Teknoloji | Konum |
+|---|---|---|
+| Ortak Python çekirdeği | Pure Python (regex, sözlük, demo data, safety) | `kap_okuryazar/` |
+| Backend API | FastAPI + Pydantic + uvicorn | `backend/` |
+| Frontend | Next.js 15 + TypeScript + Tailwind + shadcn-stili Radix bileşenleri | `frontend/` |
+| Eski Streamlit demo | Streamlit + gTTS (korunuyor) | `app.py` |
+| Telegram bot (opsiyonel) | python-telegram-bot | `telegram_bot.py` |
 
-## Özellikler
+KAP veri çekme, Gemini sadeleştirme ve güvenlik (yatırım tavsiyesi dilini temizleme) tamamen Python tarafında. Frontend yalnızca API çağırır; API key frontend koduna gömülmez.
 
-- KAP şirket arama ve bildirim çekme
-- Gemini ile sadeleştirme, fallback modda kural tabanlı özet
-- Yatırım tavsiyesi dilini temizleyen güvenlik katmanı
-- Demo/offline veri akışı
-- Streamlit tarafında ses, PDF, görsel analiz, canlı izleme ve jüri paketi
-- Yeni frontend tarafında Liquid Glass hissinde modern arayüz, geçmiş aramalar ve API bağlantısı
+## Ortam değişkenleri
 
-## Klasör Yapısı
+`.env` dosyaları repoya commitlenmez (`.gitignore` koruma altında). Örnekler:
 
-```text
-app.py                         Eski Streamlit uygulaması
-kap_okuryazar/                 Ortak config, demo data, model, safety, text utils
-backend/app/main.py            FastAPI uygulaması
-backend/app/services/          KAP, Gemini, summarizer, safety servisleri
-backend/app/models/schemas.py  Pydantic API modelleri
-frontend/src/app/              Next.js app router
-frontend/src/components/       Liquid Glass UI bileşenleri
-frontend/src/lib/              API client ve TypeScript tipleri
-telegram_bot.py                Opsiyonel Telegram bot
 ```
-
-## Ortam Değişkenleri
-
-Kök Streamlit uygulaması için:
-
-```powershell
-Copy-Item .env.example .env
+.env.example                # Streamlit ve Telegram için kök seviye
+backend/.env.example        # FastAPI backend için
+frontend/.env.example       # Next.js frontend için
 ```
 
 Backend için:
 
-```powershell
-Copy-Item backend\.env.example backend\.env
+```bash
+cp backend/.env.example backend/.env
+# Backend/.env içine GEMINI_API_KEY ekle
 ```
 
-`.env` içine Gemini anahtarını koy:
+Frontend için:
 
-```text
-GEMINI_API_KEY=...
+```bash
+cp frontend/.env.example frontend/.env.local
 ```
 
-API key repoya yazılmamalı.
+API key kesinlikle frontend `.env`'ine yazılmamalı. Frontend sadece `NEXT_PUBLIC_API_URL` üzerinden backend'e istek atar; key backend'in `.env`'inde tutulur.
 
-## Streamlit Modu
+## FastAPI backend
 
-Streamlit modu şimdilik ana demo olarak çalışmaya devam eder.
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-streamlit run app.py
-```
-
-Adres:
-
-```text
-http://localhost:8501
-```
-
-## FastAPI Backend
-
-```powershell
+```bash
 cd backend
 pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-Adres:
+Adres: `http://localhost:8000`
 
-```text
-http://localhost:8000
-```
+### Endpointler
 
-Endpointler:
+| Method | Path | Açıklama |
+|---|---|---|
+| GET | `/health` | Sağlık kontrolü |
+| GET | `/api/status` | KAP ve Gemini durumu |
+| POST | `/api/explain` | Bildirimleri sadeleştir |
+| POST | `/api/test-gemini` | Gemini API bağlantı testi |
 
-- `GET /health`
-- `GET /api/status`
-- `POST /api/explain`
-- `POST /api/test-gemini`
-
-Örnek `/api/explain` body:
+`POST /api/explain` örneği:
 
 ```json
 {
@@ -104,36 +70,106 @@ Endpointler:
 }
 ```
 
-## Next.js Frontend
+Cevap:
 
-Bu ortamda `npm` PATH'te olmadığı için build burada çalıştırılamadı; dosyalar hazırlandı. Node/npm kurulu bir terminalde:
+```json
+{
+  "company": "...",
+  "summary": "Sade açıklama metni...",
+  "notifications": [
+    { "date": "2026-01-01", "title": "...", "plainText": "..." }
+  ],
+  "source": "kap",
+  "disclaimer": "Bu çıktı yatırım tavsiyesi değildir."
+}
+```
 
-```powershell
+CORS izni `ALLOWED_ORIGINS` env'i ile kontrol edilir (varsayılan `http://localhost:3000,http://127.0.0.1:3000`).
+
+## Next.js frontend
+
+```bash
 cd frontend
 npm install
-Copy-Item .env.example .env.local
+cp .env.example .env.local
 npm run dev
 ```
 
-Adres:
+Adres: `http://localhost:3000`
 
-```text
-http://localhost:3000
+Production build:
+
+```bash
+npm run build
+npm run start
 ```
 
-Frontend varsayılan olarak backend'i buradan çağırır:
+### Tasarım
 
-```text
-NEXT_PUBLIC_API_URL=http://localhost:8000
+- Apple Liquid Glass hissinde frosted glass paneller
+- Hafif iridescent (mor / cyan / pembe) glow
+- shadcn-stili Radix UI bileşenleri (Switch, Slider, Select, Tooltip, Button, Badge, Card)
+- Tailwind tabanlı utility class'lar; özel `glass-surface`, `glass-soft`, `iris-glow` class'ları
+- Yüksek kontrast modu (`prefers-reduced-motion` ve renk kontrastı için)
+- Geçmiş aramalar `localStorage` ile saklanır
+
+### Frontend dosya yapısı
+
 ```
+frontend/
+  components.json
+  src/
+    app/
+      layout.tsx
+      page.tsx
+      globals.css
+    components/
+      AppShell.tsx
+      Header.tsx
+      Sidebar.tsx
+      HeroSearch.tsx
+      ResultsPanel.tsx
+      StatusCards.tsx
+      GlassCard.tsx
+      ui/
+        button.tsx
+        switch.tsx
+        slider.tsx
+        select.tsx
+        input.tsx
+        card.tsx
+        badge.tsx
+        tooltip.tsx
+    lib/
+      api.ts
+      types.ts
+      utils.ts
+```
+
+## Eski Streamlit demosu
+
+Streamlit modu silinmedi; jüri sunumu için zengin demo (sesli okuma, mikrofon, PDF analizi, anomali tespiti) korunuyor.
+
+```bash
+python -m venv .venv
+source .venv/bin/activate     # Windows: .\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+Adres: `http://localhost:8501`
 
 ## Güvenlik
 
-Bu uygulama yatırım tavsiyesi vermez. Gemini çıktıları prompt kurallarıyla sınırlandırılır ve sonrasında `apply_safety_guard()` ile "al", "sat", "kesin yükselir" gibi tavsiye dili temizlenir.
+- Yatırım tavsiyesi verilmez. Gemini çıktısındaki "al / sat / kesin yükselir" gibi ifadeler `kap_okuryazar/safety.py` tarafından regex ile temizlenir.
+- API key repoya commitlenmez (`.gitignore` koruma altında).
+- Backend hata mesajları gizli anahtarı sızdırmaz.
+- Frontend API key tutmaz; sidebar'da "anahtar `.env` üzerinden okunur" mesajı gösterilir.
 
-## Geliştirme Notları
+## Geliştirme notları
 
-- Streamlit silinmedi; yeni mimari paralel eklendi.
-- Backend, mevcut KAP ve Gemini mantığını Python tarafında tutar.
-- Frontend sadece API çağırır; API key frontend koduna gömülmez.
-- Geçmiş aramalar frontend tarafında `localStorage` ile saklanır.
+- Streamlit ve yeni mimari paralel çalışır.
+- Backend, `kap_okuryazar/` çekirdeğini import eder; bootstrap `sys.path`'e repo kökünü ekler.
+- Ortak iş mantığı (KAP arama, sadeleştirme, safety) tek yerde tanımlı: çekirdekte ve servis modüllerinde.
+- Mikrofon kartı bu fazda statik görseldir; ses kaydı şimdilik yalnızca Streamlit demosunda.
+- shadcn ekosisteminden yalnızca kullanılan bileşenler eklendi: `@radix-ui/react-switch`, `react-slider`, `react-select`, `react-tooltip`, `react-slot`.

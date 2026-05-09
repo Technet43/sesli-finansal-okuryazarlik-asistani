@@ -1,3 +1,5 @@
+export type ExplanationMode = "simple" | "professional" | "technical";
+
 export type SystemStatus = {
   kap: {
     status: "live" | "fallback" | "offline" | string;
@@ -14,7 +16,7 @@ export type ExplainRequest = {
   company: string;
   days: number;
   summaryCount: number;
-  mode: "simple" | "professional" | "technical";
+  mode: ExplanationMode;
   useDemo: boolean;
 };
 

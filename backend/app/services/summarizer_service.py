@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from kap_okuryazar.config import DEFAULT_MODEL
 from kap_okuryazar.models import CompanyMatch
 
 from app.services.gemini_service import get_client, json_from_text
@@ -91,7 +92,7 @@ KAP bildirimleri:
 {compact_disclosures(disclosures)}
 """
     try:
-        response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+        response = client.models.generate_content(model=DEFAULT_MODEL, contents=prompt)
         data = json_from_text(response.text or "")
         return normalize_summary(data, company, disclosures)
     except Exception:

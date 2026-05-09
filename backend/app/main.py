@@ -7,7 +7,7 @@ from app.core.bootstrap import ensure_repo_root_on_path
 
 ensure_repo_root_on_path()
 
-from app.core.config import DISCLAIMER, FRONTEND_ORIGIN, SERVICE_NAME  # noqa: E402
+from app.core.config import ALLOWED_ORIGINS, DISCLAIMER, SERVICE_NAME  # noqa: E402
 from app.models.schemas import (  # noqa: E402
     ExplainRequest,
     ExplainResponse,
@@ -30,7 +30,7 @@ app = FastAPI(title="KAP Okuryazar API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[FRONTEND_ORIGIN, "http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

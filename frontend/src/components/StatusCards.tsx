@@ -1,6 +1,5 @@
 import { Activity, Sparkles } from "lucide-react";
 import type { SystemStatus } from "@/lib/types";
-import { GlassCard } from "./GlassCard";
 
 type StatusCardsProps = {
   status: SystemStatus | null;
@@ -9,28 +8,64 @@ type StatusCardsProps = {
 export function StatusCards({ status }: StatusCardsProps) {
   const kapLabel = status?.kap.label ?? "Canlı veri kaynağı";
   const geminiLabel = status?.gemini.label ?? "Fallback modda";
+  const kapStatus = status?.kap.status ?? "live";
   const geminiConnected = status?.gemini.status === "connected";
 
   return (
     <div className="space-y-3">
-      <p className="text-sm font-semibold text-slate-900">Sistem durumu</p>
+      <p className="text-sm font-semibold text-ink">Sistem durumu</p>
       <div className="grid grid-cols-2 gap-3">
-        <GlassCard className="p-4">
-          <div className="flex items-center gap-2 text-sm font-semibold">
-            <Activity className="h-4 w-4 text-emerald-500" />
-            KAP
-          </div>
-          <p className="mt-2 text-xs text-slate-600">{kapLabel}</p>
-        </GlassCard>
-        <GlassCard className="p-4">
-          <div className="flex items-center gap-2 text-sm font-semibold">
-            <Sparkles className={geminiConnected ? "h-4 w-4 text-violet-600" : "h-4 w-4 text-slate-500"} />
-            Gemini
-          </div>
-          <p className="mt-2 text-xs text-slate-600">{geminiLabel}</p>
-        </GlassCard>
+        <StatusTile
+          icon={<Activity className="h-4 w-4 text-emerald-500" aria-hidden />}
+          title="KAP"
+          description={kapLabel}
+          dotColor={kapStatus === "live" ? "bg-emerald-500" : "bg-amber-400"}
+        />
+        <StatusTile
+          icon={
+            <Sparkles
+              className={
+                geminiConnected
+                  ? "h-4 w-4 text-iris-indigo"
+                  : "h-4 w-4 text-ink-muted"
+              }
+              aria-hidden
+            />
+          }
+          title="Gemini"
+          description={geminiLabel}
+          dotColor={geminiConnected ? "bg-iris-indigo" : "bg-amber-400"}
+        />
       </div>
-      <p className="text-xs text-emerald-600">Son kontrol: {status?.lastCheck ?? "Az önce"}</p>
+      <p className="text-xs text-emerald-600">
+        <span className="mr-1.5 inline-block h-1.5 w-1.5 -translate-y-0.5 rounded-full bg-emerald-500" />
+        Son kontrol: {status?.lastCheck ?? "Az önce"}
+      </p>
+    </div>
+  );
+}
+
+function StatusTile({
+  icon,
+  title,
+  description,
+  dotColor,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  dotColor: string;
+}) {
+  return (
+    <div className="glass-soft rounded-xl p-3.5">
+      <div className="flex items-center gap-2">
+        <span className={`h-1.5 w-1.5 rounded-full ${dotColor}`} aria-hidden />
+        <div className="flex items-center gap-1.5 text-sm font-semibold text-ink">
+          {icon}
+          {title}
+        </div>
+      </div>
+      <p className="mt-1.5 text-[11px] leading-4 text-ink-muted">{description}</p>
     </div>
   );
 }
