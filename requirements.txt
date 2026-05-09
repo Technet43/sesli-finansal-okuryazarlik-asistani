@@ -1,0 +1,11 @@
+streamlit>=1.39.0
+google-genai>=1.0.0
+gTTS>=2.5.3
+python-dotenv>=1.0.1
+rapidfuzz>=3.9.7
+beautifulsoup4>=4.12.3
+requests>=2.32.3
+pypdf>=6.0.0
+
+# Opsiyonel — sadece Telegram botu için gerekli
+python-telegram-bot>=21.6
