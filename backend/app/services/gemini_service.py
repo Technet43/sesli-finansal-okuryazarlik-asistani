@@ -6,25 +6,38 @@ import re
 
 from kap_okuryazar.config import DEFAULT_MODEL
 
-try:
-    from google import genai
-except Exception:  # pragma: no cover - surfaced by API status
-    genai = None
+
+def _load_genai():
+    try:
+        from google import genai  # type: ignore
+        return genai
+    except BaseException:  # pyo3 panics inherit from BaseException
+        return None
 
 
 def get_client():
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
-    if not api_key or genai is None:
+    if not api_key:
         return None
-    return genai.Client(api_key=api_key)
+    genai = _load_genai()
+    if genai is None:
+        return None
+    try:
+        return genai.Client(api_key=api_key)
+    except BaseException:
+        return None
 
 
 def test_connection() -> tuple[bool, str]:
+    api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        return False, "GEMINI_API_KEY bulunamadı. .env dosyasına ekle."
+    if _load_genai() is None:
+        return False, "google-genai paketi yüklenemedi."
+
     client = get_client()
     if client is None:
-        if genai is None:
-            return False, "google-genai paketi yüklenemedi."
-        return False, "GEMINI_API_KEY bulunamadı. .env dosyasına ekle."
+        return False, "Gemini istemcisi başlatılamadı."
 
     try:
         response = client.models.generate_content(
