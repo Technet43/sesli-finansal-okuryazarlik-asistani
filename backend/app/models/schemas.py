@@ -25,11 +25,17 @@ class AnomalyFlag(BaseModel):
     description: str
 
 
+class FinancialNumber(BaseModel):
+    label: str
+    value: str
+
+
 class ExplainResponse(BaseModel):
     company: str
     summary: str
     notifications: list[Notification]
     anomalies: list[AnomalyFlag]
+    financialNumbers: list[FinancialNumber]
     source: str
     disclaimer: str
 

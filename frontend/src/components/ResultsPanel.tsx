@@ -1,4 +1,4 @@
-import { AlertCircle, ExternalLink, FileText, Loader2 } from "lucide-react";
+import { AlertCircle, ExternalLink, FileText, Loader2, TrendingUp } from "lucide-react";
 import type { ExplainResponse } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { GlassCard } from "./GlassCard";
@@ -96,7 +96,26 @@ export function ResultsPanel({ result, loading, error }: ResultsPanelProps) {
         </div>
       ) : null}
 
-      <div className={`${result.anomalies && result.anomalies.length > 0 ? "mt-6" : "mt-7"} grid gap-3`}>
+      {result.financialNumbers && result.financialNumbers.length > 0 ? (
+        <div className={`${result.anomalies && result.anomalies.length > 0 ? "mt-6" : "mt-7"} rounded-2xl border border-white/65 bg-white/55 p-5 shadow-glass-soft backdrop-blur`}>
+          <div className="flex items-center gap-3 mb-4">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white text-emerald-600 shadow-[0_8px_22px_-14px_rgba(16,185,129,0.45)]">
+              <TrendingUp className="h-4 w-4" aria-hidden />
+            </span>
+            <h3 className="font-semibold text-ink">Finansal Rakamlar</h3>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {result.financialNumbers.map((num) => (
+              <div key={num.label} className="rounded-lg border border-white/50 bg-white/30 p-3">
+                <p className="text-xs font-medium text-ink-muted">{num.label}</p>
+                <p className="mt-1 text-sm font-semibold text-iris-indigo">{num.value}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <div className={`${result.anomalies && result.anomalies.length > 0 ? "mt-6" : result.financialNumbers && result.financialNumbers.length > 0 ? "mt-6" : "mt-7"} grid gap-3`}>
         {result.notifications.map((item, index) => (
           <article
             key={`${item.date}-${index}`}

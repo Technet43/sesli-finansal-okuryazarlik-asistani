@@ -12,6 +12,7 @@ from app.models.schemas import (  # noqa: E402
     AnomalyFlag,
     ExplainRequest,
     ExplainResponse,
+    FinancialNumber,
     GeminiTestResponse,
     HealthResponse,
     Notification,
@@ -26,7 +27,10 @@ from app.services.kap_service import (  # noqa: E402
     resolve_company,
 )
 from app.services.summarizer_service import explain_disclosures  # noqa: E402
-from kap_okuryazar.text_utils import detect_anomalies  # noqa: E402
+from kap_okuryazar.text_utils import (  # noqa: E402
+    detect_anomalies,
+    extract_financial_numbers,
+)
 
 app = FastAPI(title="KAP Okuryazar API", version="0.1.0")
 
@@ -95,11 +99,23 @@ def explain(
             AnomalyFlag(icon=icon, title=title, description=description)
             for icon, title, description in anomalies_raw
         ]
+        financial_numbers_dict: dict[str, str] = {}
+        for disclosure in disclosures:
+            text = disclosure.get("page_text") or disclosure.get("summary") or ""
+            numbers = extract_financial_numbers(text)
+            for label, value in numbers:
+                if label not in financial_numbers_dict:
+                    financial_numbers_dict[label] = value
+        financial_numbers = [
+            FinancialNumber(label=label, value=value)
+            for label, value in financial_numbers_dict.items()
+        ]
         return ExplainResponse(
             company=company.name,
             summary=result["summary"],
             notifications=[Notification(**item) for item in result["notifications"]],
             anomalies=anomalies,
+            financialNumbers=financial_numbers,
             source=source,
             disclaimer=DISCLAIMER,
         )

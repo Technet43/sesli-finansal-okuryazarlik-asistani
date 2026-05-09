@@ -34,11 +34,17 @@ export type AnomalyFlag = {
   description: string;
 };
 
+export type FinancialNumber = {
+  label: string;
+  value: string;
+};
+
 export type ExplainResponse = {
   company: string;
   summary: string;
   notifications: Notification[];
   anomalies: AnomalyFlag[];
+  financialNumbers: FinancialNumber[];
   source: "kap" | "demo" | string;
   disclaimer: string;
 };
