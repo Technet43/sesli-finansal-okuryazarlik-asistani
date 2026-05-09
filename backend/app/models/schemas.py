@@ -15,6 +15,8 @@ class Notification(BaseModel):
     date: str
     title: str
     plainText: str
+    url: str | None = None
+    category: str | None = None
 
 
 class ExplainResponse(BaseModel):

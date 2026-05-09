@@ -24,6 +24,8 @@ export type Notification = {
   date: string;
   title: string;
   plainText: string;
+  url?: string;
+  category?: string;
 };
 
 export type ExplainResponse = {

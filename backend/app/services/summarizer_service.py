@@ -43,6 +43,8 @@ def fallback_summary(company: CompanyMatch, disclosures: list[dict]) -> dict:
                 "date": str(item.get("publish_datetime", ""))[:10],
                 "title": clean_advice_language(title),
                 "plainText": clean_advice_language(plain),
+                "url": item.get("url"),
+                "category": item.get("category"),
             }
         )
 
@@ -85,7 +87,9 @@ JSON şeması:
     {{
       "date": "YYYY-MM-DD",
       "title": "bildirim başlığı",
-      "plainText": "sade açıklama"
+      "plainText": "sade açıklama",
+      "url": "KAP bildirimi linki (isteğe bağlı)",
+      "category": "bildirim kategorisi (isteğe bağlı)"
     }}
   ]
 }}
@@ -124,6 +128,8 @@ def normalize_summary(data: dict, company: CompanyMatch, disclosures: list[dict]
                 "date": str(item.get("date") or source.get("publish_datetime", ""))[:10],
                 "title": clean_advice_language(str(item.get("title") or source.get("subject") or "")),
                 "plainText": clean_advice_language(str(item.get("plainText") or source.get("summary") or "")),
+                "url": item.get("url") or source.get("url"),
+                "category": item.get("category") or source.get("category"),
             }
         )
 

@@ -1,4 +1,4 @@
-import { AlertCircle, FileText, Loader2 } from "lucide-react";
+import { AlertCircle, ExternalLink, FileText, Loader2 } from "lucide-react";
 import type { ExplainResponse } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { GlassCard } from "./GlassCard";
@@ -86,14 +86,33 @@ export function ResultsPanel({ result, loading, error }: ResultsPanelProps) {
                 <FileText className="h-4 w-4" aria-hidden />
               </span>
               <div className="min-w-0 flex-1">
-                {item.date ? (
-                  <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">
-                    {item.date}
-                  </p>
-                ) : null}
-                <h3 className="mt-1 font-semibold leading-snug text-ink">
-                  {item.title}
-                </h3>
+                <div className="flex flex-wrap items-center gap-2">
+                  {item.date ? (
+                    <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">
+                      {item.date}
+                    </p>
+                  ) : null}
+                  {item.category ? (
+                    <Badge variant="iris" className="text-xs">
+                      {item.category}
+                    </Badge>
+                  ) : null}
+                </div>
+                {item.url ? (
+                  <a
+                    href={item.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-1 inline-flex items-center gap-2 font-semibold leading-snug text-iris-indigo hover:underline"
+                  >
+                    {item.title}
+                    <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                  </a>
+                ) : (
+                  <h3 className="mt-1 font-semibold leading-snug text-ink">
+                    {item.title}
+                  </h3>
+                )}
                 <p className="mt-2 text-sm leading-6 text-ink-muted">
                   {item.plainText}
                 </p>
