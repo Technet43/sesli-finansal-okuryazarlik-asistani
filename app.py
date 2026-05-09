@@ -55,6 +55,21 @@ POPULAR_COMPANY_ALIASES = {
         "ISATR, ISBTR, ISCTR, ISKUR, TIB",
         "4028e4a140f2ed7201411682b0cb05c6",
     ),
+    "halkbank": (
+        "TÜRKİYE HALK BANKASI A.Ş.",
+        "HALKB, THL",
+        "1DE05DAA82C3073AE0530A4A622A2EBD",
+    ),
+    "halk bankasi": (
+        "TÜRKİYE HALK BANKASI A.Ş.",
+        "HALKB, THL",
+        "1DE05DAA82C3073AE0530A4A622A2EBD",
+    ),
+    "turkiye halk bankasi": (
+        "TÜRKİYE HALK BANKASI A.Ş.",
+        "HALKB, THL",
+        "1DE05DAA82C3073AE0530A4A622A2EBD",
+    ),
 }
 
 DISCLOSURE_TYPES = [
@@ -68,7 +83,7 @@ DISCLOSURE_TYPES = [
     ("Sözleşme/İhale", ["ihale", "sözleşme", "sipariş", "proje"]),
 ]
 
-EXAMPLE_COMPANIES = ["İş Bankası", "THYAO", "ASELS", "AKBNK", "GARAN"]
+EXAMPLE_COMPANIES = ["İş Bankası", "Halkbank", "THYAO", "ASELS", "GARAN"]
 
 JURY_POINTS = [
     ("Yerel problem", "Türkiye'deki KAP bildirimlerini sadeleştiriyor."),
@@ -363,12 +378,20 @@ def resolve_company(query: str) -> CompanyMatch | None:
             exact_ticker["name"], exact_ticker["ticker"], exact_ticker["oid"], 100.0
         )
 
+    query_tokens = set(query_norm.split())
     choices = {company["search"]: company for company in companies}
-    result = process.extractOne(query_norm, choices.keys(), scorer=fuzz.WRatio, score_cutoff=55)
+    scorer = fuzz.token_set_ratio if len(query_tokens) <= 2 else fuzz.WRatio
+    result = process.extractOne(query_norm, choices.keys(), scorer=scorer, score_cutoff=72)
     if not result:
         return None
 
     matched_key, score, _ = result
+    matched_tokens = set(matched_key.split())
+    if query_tokens and not (query_tokens & matched_tokens):
+        return None
+    if len(query_norm) >= 5 and query_norm not in matched_key and score < 86:
+        return None
+
     company = choices[matched_key]
     return CompanyMatch(company["name"], company["ticker"], company["oid"], float(score))
 
@@ -1091,6 +1114,17 @@ def render_styles() -> None:
                 0 4px 16px rgba(28, 36, 80, 0.06);
         }
 
+        div[data-testid="stTextInput"] input {
+            min-height: 72px !important;
+            font-size: 1.35rem !important;
+            font-weight: 520;
+            padding: 0 18px !important;
+        }
+        section[data-testid="stSidebar"] div[data-testid="stTextInput"] input {
+            min-height: 48px !important;
+            font-size: 1rem !important;
+        }
+
         /* === Liquid Glass Buttons === */
         div[data-testid="stButton"] button,
         div[data-testid="stDownloadButton"] button,
@@ -1472,23 +1506,38 @@ def render_hero() -> None:
     )
 
 
-def render_example_buttons() -> None:
-    columns = st.columns(len(EXAMPLE_COMPANIES))
-    for column, example in zip(columns, EXAMPLE_COMPANIES):
-        if column.button(example, use_container_width=True, key=f"ex_{example}"):
-            st.session_state["company_query"] = example
+def remember_search(query: str) -> None:
+    query = query.strip()
+    if not query:
+        return
+    history = st.session_state.setdefault("search_history", [])
+    normalized = normalize_tr(query)
+    history[:] = [item for item in history if normalize_tr(item) != normalized]
+    history.insert(0, query)
+    del history[5:]
+
+
+def render_search_history() -> None:
+    history = st.session_state.get("search_history", [])
+    if not history:
+        st.caption("Geçmiş aramalar burada görünecek.")
+        return
+
+    st.caption("Geçmişte arattıklarınız")
+    columns = st.columns(min(len(history), 5))
+    for column, item in zip(columns, history):
+        if column.button(item, use_container_width=True, key=f"hist_{normalize_tr(item)}"):
+            st.session_state["company_query"] = item
 
 
 def render_company_header(company: CompanyMatch, disclosure_count: int, demo_mode: bool) -> None:
-    demo_badge = '<span class="badge badge-warn">DEMO</span>' if demo_mode else ""
+    demo_line = "Demo verisiyle gösteriliyor." if demo_mode else "KAP'tan son resmi bildirimler alındı."
     st.markdown(
         f"""
         <div class="panel">
-            {demo_badge}
-            <span class="badge badge-good">Eşleşme %{company.score:.0f}</span>
-            <span class="badge badge-info">{escape(company.ticker or "kod yok")}</span>
+            <div class="muted">Şirket</div>
             <h3>{escape(company.name)}</h3>
-            <div class="muted">{disclosure_count} KAP bildirimi sadeleştirme için hazırlandı.</div>
+            <div class="muted">{escape(company.ticker or "kod yok")} · {disclosure_count} haber bulundu · {demo_line}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -1767,6 +1816,7 @@ def render_compare_tab(primary: CompanyMatch, primary_disclosures: list[dict], d
             if other is None:
                 st.error("İkinci şirket bulunamadı.")
                 return
+            remember_search(other_query)
             with st.spinner("İkinci şirketin bildirimleri çekiliyor..."):
                 other_disclosures = fetch_disclosures(other.oid, days, limit)
             if not other_disclosures:
@@ -2199,7 +2249,7 @@ def main() -> None:
         label_visibility="collapsed",
     )
 
-    render_example_buttons()
+    render_search_history()
 
     with st.expander("🎙️ Mikrofonla söylemek istersen", expanded=False):
         audio_query_holder = st.container()
@@ -2255,6 +2305,7 @@ def main() -> None:
         if company is None:
             st.error("Bu şirketi KAP listesinde bulamadım. Hisse kodu ile tekrar dene.")
             st.stop()
+        remember_search(query)
 
         try:
             with st.spinner("Son KAP bildirimleri çekiliyor..."):
