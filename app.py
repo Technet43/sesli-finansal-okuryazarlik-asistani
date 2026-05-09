@@ -869,6 +869,49 @@ Belge:
         return f"Sadeleştirme sırasında hata: {exc}"
 
 
+def analyze_visual_document(file_bytes: bytes, mime_type: str, user_note: str, tone: str) -> str:
+    """Gemini Vision ile grafik, ekran görüntüsü veya PDF görselini sade anlatır."""
+    client = get_gemini_client()
+    if client is None or types is None:
+        return (
+            "Gemini Vision analizi için GEMINI_API_KEY gerekli. "
+            "Sidebar'dan API key girip bağlantıyı test edebilirsin."
+        )
+
+    visual_part = types.Part.from_bytes(data=file_bytes, mime_type=mime_type)
+    note = user_note.strip() or "Kullanıcı ek not girmedi."
+    prompt = f"""Sen Türkiye'deki sıradan vatandaşlar için finansal okuryazarlık asistanısın.
+Yüklenen görseli veya PDF'i incele. Bu bir BIST grafiği, finansal rapordaki çubuk grafik,
+tablo, sunum sayfası veya KAP ekran görüntüsü olabilir.
+
+Kesin kurallar:
+- Yatırım tavsiyesi verme.
+- "Al", "sat", "tut", "kesin yükselir", "kesin düşer" deme.
+- Görselde kanıt yoksa tahmin uydurma.
+- Teknik analizi kesin sonuç gibi anlatma; sadece eğitim amaçlı yorumla.
+- Kısa, sade Türkçe kullan.
+- Ton: {tone}
+
+Kullanıcının notu:
+{note}
+
+Şu başlıklarla Markdown yaz:
+### Bu görsel ne gösteriyor?
+### En dikkat çeken 3 nokta
+### Basit yorum
+### Riskler ve belirsizlikler
+### Sesli okunacak kısa özet
+"""
+    try:
+        response = client.models.generate_content(
+            model=DEFAULT_MODEL,
+            contents=[prompt, visual_part],
+        )
+        return apply_safety_guard((response.text or "").strip())
+    except Exception as exc:
+        return f"Grafik analizi sırasında hata oluştu: {exc}"
+
+
 def extract_pdf_bytes_text(file_bytes: bytes) -> str:
     """Yüklenen PDF byte'larından metin çıkarır."""
     try:
@@ -1791,6 +1834,81 @@ def render_pdf_tab() -> None:
         )
 
 
+def render_visual_analysis_tab(tone: str) -> None:
+    st.markdown("### Gemini Vision ile grafik analizi")
+    st.caption(
+        "BIST grafiği, finansal rapor görseli, KAP ekran görüntüsü veya PDF yükle. "
+        "Gemini görseli sade Türkçe'ye çevirir."
+    )
+
+    uploaded = st.file_uploader(
+        "Grafik/görsel/PDF yükle",
+        type=["png", "jpg", "jpeg", "webp", "pdf"],
+        key="vision_upload",
+    )
+    user_note = st.text_area(
+        "İstersen bağlam ekle",
+        placeholder="Örn: THYAO son 3 aylık fiyat grafiği, hacim çubukları altta görünüyor.",
+        key="vision_note",
+        height=90,
+    )
+
+    if uploaded is None:
+        st.info(
+            "Demo fikri: Bir BIST fiyat grafiğinin ekran görüntüsünü yükle. "
+            "Uygulama grafiği yatırım tavsiyesi vermeden sade dille açıklar."
+        )
+        st.markdown(
+            """
+            <div class="source-row">
+                <span class="badge badge-info">Multimodal Gemini</span>
+                <div class="muted">Metin + görsel + sesli anlatım aynı ürün hikayesinde birleşir.</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        return
+
+    file_bytes = uploaded.getvalue()
+    mime_type = uploaded.type or "application/octet-stream"
+
+    if len(file_bytes) > 7_000_000:
+        st.error("Dosya çok büyük (7 MB üstü). Daha küçük bir görsel veya PDF yükle.")
+        return
+
+    if mime_type.startswith("image/"):
+        st.image(file_bytes, caption="Yüklenen görsel", use_container_width=True)
+    else:
+        st.caption(f"Yüklenen dosya: {uploaded.name} ({mime_type})")
+
+    if st.button("Görseli sade Türkçe anlat", type="primary", use_container_width=True):
+        with st.spinner("Gemini görseli inceliyor..."):
+            result = analyze_visual_document(file_bytes, mime_type, user_note, tone)
+        increment_stat("vision_analyses")
+        st.markdown(result)
+
+        st.download_button(
+            "Görsel analizini Markdown indir",
+            data=result.encode("utf-8"),
+            file_name="gemini_vision_grafik_analizi.md",
+            mime="text/markdown",
+            use_container_width=True,
+        )
+
+        try:
+            audio_mp3 = text_to_speech_mp3(result[:4200])
+            st.audio(audio_mp3, format="audio/mp3")
+            st.download_button(
+                "Görsel analizini MP3 indir",
+                data=audio_mp3,
+                file_name="gemini_vision_grafik_analizi.mp3",
+                mime="audio/mp3",
+                use_container_width=True,
+            )
+        except Exception as exc:
+            st.warning(f"Sesli okuma üretilemedi: {exc}")
+
+
 def render_live_watch(company: CompanyMatch, days: int, limit: int) -> None:
     st.markdown("### 🔔 Canlı izleme")
     st.caption(
@@ -2138,6 +2256,7 @@ def main() -> None:
         tab_chat,
         tab_compare,
         tab_pdf,
+        tab_vision,
         tab_live,
         tab_sources,
         tab_jury,
@@ -2148,6 +2267,7 @@ def main() -> None:
             "💬 AI sohbet",
             "🔀 Karşılaştır",
             "📄 PDF yükle",
+            "📈 Grafik analizi",
             "🔔 Canlı izleme",
             "📚 Kaynaklar",
             "🏆 Jüri paketi",
@@ -2184,6 +2304,9 @@ def main() -> None:
 
     with tab_pdf:
         render_pdf_tab()
+
+    with tab_vision:
+        render_visual_analysis_tab(tone)
 
     with tab_live:
         if demo_mode:

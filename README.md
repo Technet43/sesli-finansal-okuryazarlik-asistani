@@ -8,7 +8,7 @@ Kullanıcı şirket adını yazar veya mikrofona söyler. Uygulama KAP'tan son b
 
 ### Çekirdek
 - 🇹🇷 **Yerel problem** — Türk KAP bildirimleri, BIST şirketleri
-- 🎙️ **Multimodal giriş** — yazı, ses (Gemini transkripsiyon), PDF yükleme
+- 🎙️ **Multimodal giriş** — yazı, ses (Gemini transkripsiyon), PDF ve görsel yükleme
 - 📰 **Sade kartlar** — ne oldu, neden önemli, küçük yatırımcı notu, risk
 - 🔊 **Sesli okuma + indirme** — gTTS, MP3 olarak indirilebilir
 - 🛡️ **Güvenlik kalkanı** — AI çıktısındaki "al/sat/kesin yükselir" gibi tavsiye dili regex ile otomatik temizlenir
@@ -19,6 +19,7 @@ Kullanıcı şirket adını yazar veya mikrofona söyler. Uygulama KAP'tan son b
 - ⚠️ **Risk Dedektörü** — geç bildirim, çoklu düzeltme, yoğun sermaye/borçlanma, gece saati paternleri
 - 🔀 **Şirket Karşılaştırma** — iki şirketi yan yana AI ile karşılaştır
 - 📄 **PDF Sadeleştirme** — KAP dışı belgeleri (yıllık rapor, mevzuat) sade Türkçe'ye çevir
+- 📈 **Gemini Vision Grafik Analizi** — BIST grafiği, finansal rapor görseli veya KAP ekran görüntüsünü sade Türkçe + sesli anlatıma çevir
 - 🔔 **Canlı İzleme** — st.fragment ile her 60 saniyede otomatik KAP polling, yeni bildirim toast bildirimi
 - 📚 **Glossary Tooltips** — "temettü", "konsolide" gibi terimler otomatik altı çizili, hover'da açıklama
 - 🔍 **A/B Karşılaştırma** — her kartın altında "KAP'ın resmi dili ↔ bizim sade dilimiz" yan yana
@@ -79,24 +80,27 @@ Komutlar:
 ## Demo Akışı (Streamlit)
 
 1. Sidebar'dan **Demo modu** aç (veya gerçek şirket adı yaz: "İş Bankası", "THYAO").
-2. **"Anlat"** butonuna bas → 8 sekme açılır.
+2. **"Anlat"** butonuna bas → 9 sekme açılır.
 3. **📰 Sade anlatım** — bildirim kartları, risk dedektörü, finansal metric'ler, A/B karşılaştırma.
 4. **🔊 Sesli okuma** — gTTS okuma + MP3 indir.
 5. **💬 AI sohbet** — sorular sor, sesli cevap toggle'ı aç.
 6. **🔀 Karşılaştır** — ikinci şirket gir, yan yana karşılaştır.
 7. **📄 PDF yükle** — kendi belgeni sadeleştir.
-8. **🔔 Canlı izleme** — yeni bildirim için arka plan polling.
-9. **📚 Kaynaklar** — orijinal KAP linkleri.
-10. **🏆 Jüri paketi** — grafikler, demo metni, başvuru özeti.
+8. **📈 Grafik analizi** — BIST grafiği veya finansal rapor görselini Gemini Vision ile yorumlat.
+9. **🔔 Canlı izleme** — yeni bildirim için arka plan polling.
+10. **📚 Kaynaklar** — orijinal KAP linkleri.
+11. **🏆 Jüri paketi** — grafikler, demo metni, başvuru özeti.
 
 ## Mimari
 
 ```
-[Kullanıcı] → text/voice/PDF
+[Kullanıcı] → text/voice/PDF/image
      ↓
 [Gemini #1] ses → şirket adı (multimodal transcription)
      ↓
 [KAP API] → ham bildirim metinleri
+     ↓
+[Gemini Vision] grafik/PDF görseli → sade finansal okuryazarlık yorumu
      ↓
 [Risk Dedektörü] → anomali paternleri (rule-based)
      ↓
