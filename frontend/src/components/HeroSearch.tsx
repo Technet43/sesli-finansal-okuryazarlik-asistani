@@ -1,9 +1,11 @@
 "use client";
 
+import { useEffect } from "react";
 import {
   ChevronRight,
   Clock,
   Mic,
+  MicOff,
   Search,
   ShieldCheck,
   Sparkles,
@@ -11,6 +13,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useSpeechRecognition } from "@/lib/useSpeechRecognition";
 import { GlassCard } from "./GlassCard";
 
 type HeroSearchProps = {
@@ -30,6 +33,29 @@ export function HeroSearch({
   history,
   onHistoryClick,
 }: HeroSearchProps) {
+  const speech = useSpeechRecognition("tr-TR");
+
+  useEffect(() => {
+    if (speech.transcript) {
+      setCompany(speech.transcript);
+    }
+  }, [speech.transcript, setCompany]);
+
+  const micCardLabel = !speech.isSupported
+    ? "Tarayıcın mikrofon tanımayı desteklemiyor (Chrome/Edge önerilir)."
+    : speech.isListening
+      ? "Dinliyorum... şirket adını söyle, bittiğinde durdur."
+      : "Sesli sor, KAP Okuryazar anlayıp açıklasın.";
+
+  function handleMicClick() {
+    if (!speech.isSupported) return;
+    if (speech.isListening) {
+      speech.stop();
+    } else {
+      speech.start();
+    }
+  }
+
   return (
     <section className="mx-auto flex w-full max-w-4xl flex-col items-center text-center animate-fade-in">
       <Badge variant="iris" className="text-[13px]">
@@ -82,20 +108,52 @@ export function HeroSearch({
 
         <button
           type="button"
-          aria-label="Mikrofonla söyle (yakında)"
-          title="Mikrofon desteği yakında"
-          className="mt-5 flex w-full items-center gap-4 rounded-2xl border border-white/70 bg-white/55 p-4 text-left shadow-glass-soft backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/70"
+          onClick={handleMicClick}
+          disabled={!speech.isSupported}
+          aria-label={
+            speech.isListening
+              ? "Dinlemeyi durdur"
+              : speech.isSupported
+                ? "Mikrofonla söyle"
+                : "Mikrofon desteklenmiyor"
+          }
+          aria-pressed={speech.isListening}
+          className={`mt-5 flex w-full items-center gap-4 rounded-2xl border p-4 text-left shadow-glass-soft backdrop-blur transition disabled:cursor-not-allowed disabled:opacity-60 ${
+            speech.isListening
+              ? "border-rose-300/70 bg-rose-50/80 hover:bg-rose-50"
+              : "border-white/70 bg-white/55 hover:-translate-y-0.5 hover:bg-white/70"
+          }`}
         >
-          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white text-iris-indigo shadow-[0_8px_22px_-12px_rgba(124,92,255,0.55)]">
-            <Mic className="h-5 w-5" aria-hidden />
+          <span
+            className={`relative grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white shadow-[0_8px_22px_-12px_rgba(124,92,255,0.55)] ${
+              speech.isListening ? "text-rose-500" : "text-iris-indigo"
+            }`}
+          >
+            {speech.isListening ? (
+              <>
+                <span className="absolute inset-0 animate-ping rounded-2xl bg-rose-300/40" />
+                <Mic className="relative h-5 w-5" aria-hidden />
+              </>
+            ) : speech.isSupported ? (
+              <Mic className="h-5 w-5" aria-hidden />
+            ) : (
+              <MicOff className="h-5 w-5 text-ink-muted" aria-hidden />
+            )}
           </span>
           <span className="min-w-0 flex-1">
             <span className="block text-sm font-semibold text-ink sm:text-base">
-              Mikrofonla söylemek istersen
+              {speech.isListening
+                ? "Dinleniyor..."
+                : "Mikrofonla söylemek istersen"}
             </span>
             <span className="mt-0.5 block text-xs text-ink-muted sm:text-sm">
-              Sesli sor, KAP Okuryazar anlayıp açıklasın.
+              {micCardLabel}
             </span>
+            {speech.error ? (
+              <span className="mt-1 block text-xs font-medium text-rose-600">
+                {speech.error}
+              </span>
+            ) : null}
           </span>
           <ChevronRight className="h-5 w-5 text-ink-muted" aria-hidden />
         </button>
