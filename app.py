@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 from html import escape
 from datetime import date, timedelta
@@ -11,7 +10,6 @@ from typing import Iterable
 import requests
 import streamlit as st
 from bs4 import BeautifulSoup
-from dotenv import load_dotenv
 from gtts import gTTS
 from pypdf import PdfReader
 from rapidfuzz import fuzz, process
@@ -46,8 +44,6 @@ from kap_okuryazar.text_utils import (
     normalize_tr,
 )
 
-load_dotenv()
-
 def get_secret(name: str) -> str | None:
     session_key = f"{name.lower()}_input"
     try:
@@ -56,14 +52,7 @@ def get_secret(name: str) -> str | None:
             return str(session_value).strip()
     except Exception:
         pass
-
-    value = os.getenv(name)
-    if value:
-        return value
-    try:
-        return st.secrets.get(name, None)
-    except Exception:
-        return None
+    return None
 
 
 def get_gemini_client():
@@ -78,7 +67,7 @@ def test_gemini_connection() -> tuple[bool, str]:
     if client is None:
         if genai is None:
             return False, "google-genai paketi yüklenemedi."
-        return False, "GEMINI_API_KEY bulunamadı. Sidebar'dan anahtar gir veya .env dosyasına ekle."
+        return False, "Gemini API key bulunamadı. Sidebar'dan kendi anahtarını gir."
 
     try:
         response = client.models.generate_content(
@@ -482,7 +471,7 @@ def answer_question(company: CompanyMatch, disclosures: list[dict], question: st
     client = get_gemini_client()
     if client is None:
         return (
-            "Sohbet için GEMINI_API_KEY gerekli. Sidebar'dan key gir veya .env dosyasına ekle. "
+            "Sohbet için Gemini API key gerekli. Sidebar'dan kendi anahtarını gir. "
             "Bu arada 'Sade anlatım' sekmesinden bildirimleri kural tabanlı özet olarak okuyabilirsin."
         )
 
@@ -1883,25 +1872,17 @@ def render_high_contrast_css() -> None:
 
 def render_gemini_settings() -> bool:
     st.markdown("#### Gemini API")
-    env_key = os.getenv("GEMINI_API_KEY")
-    try:
-        secrets_key = st.secrets.get("GEMINI_API_KEY", None)
-    except Exception:
-        secrets_key = None
-
-    if env_key:
-        st.success(".env üzerinden Gemini anahtarı bulundu.")
-    elif secrets_key:
-        st.success("Streamlit secrets üzerinden Gemini anahtarı bulundu.")
-    else:
-        st.info("Demo için API key'i buraya girebilirsin. Anahtar dosyaya yazılmaz.")
+    st.info(
+        "Gemini anahtarı sunucu .env veya Streamlit secrets üzerinden otomatik kullanılmaz. "
+        "Her kullanıcı kendi anahtarını bu oturum için girer."
+    )
 
     st.text_input(
         "Geçici Gemini API key",
         type="password",
         key="gemini_api_key_input",
         placeholder="AIza...",
-        help="Bu değer sadece bu Streamlit oturumunda tutulur.",
+        help="Bu değer sadece bu Streamlit oturumunda tutulur; dosyaya veya Streamlit secrets'a yazılmaz.",
     )
 
     has_key = bool(get_secret("GEMINI_API_KEY"))
