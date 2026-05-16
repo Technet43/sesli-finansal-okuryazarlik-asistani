@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 
 from kap_okuryazar.config import DEFAULT_MODEL
@@ -21,7 +20,7 @@ def _load_genai():
 
 
 def get_client(api_key: str | None = None):
-    key = (api_key or os.getenv("GEMINI_API_KEY", "")).strip()
+    key = (api_key or "").strip()
     if not key:
         return None
     if key in _CLIENT_CACHE:
@@ -39,9 +38,9 @@ def get_client(api_key: str | None = None):
 
 
 def test_connection(api_key: str | None = None) -> tuple[bool, str]:
-    key = (api_key or os.getenv("GEMINI_API_KEY", "")).strip()
+    key = (api_key or "").strip()
     if not key:
-        return False, "GEMINI_API_KEY bulunamadı. Sidebar'a yapıştır veya .env'e ekle."
+        return False, "Gemini API key bulunamadı. Sidebar'a kendi anahtarını yapıştır."
     if _load_genai() is None:
         return False, "google-genai paketi yüklenemedi."
 

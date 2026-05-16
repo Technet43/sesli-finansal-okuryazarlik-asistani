@@ -8,7 +8,6 @@ import requests
 
 from app.core.config import (
     AI_PROVIDER,
-    DEEPSEEK_API_KEY,
     DEEPSEEK_BASE_URL,
     DEEPSEEK_MODEL,
     GEMINI_MODEL,
@@ -18,7 +17,7 @@ from app.services.gemini_service import get_client
 logger = logging.getLogger(__name__)
 
 API_LIMIT_MESSAGE = "API kullanım limiti doldu. Lütfen birkaç dakika bekleyip tekrar deneyin."
-API_KEY_MESSAGE = "API anahtarı bulunamadı. Lütfen ayarlardan veya .env dosyasından API anahtarını kontrol edin."
+API_KEY_MESSAGE = "API anahtarı bulunamadı. Lütfen ayarlardan kendi API anahtarını gir."
 
 
 class AIProviderError(Exception):
@@ -41,9 +40,7 @@ def provider_label(provider: ProviderName | None = None) -> str:
 
 
 def has_provider_key(api_key: str | None = None, provider: ProviderName | None = None) -> bool:
-    if active_provider(provider) == "deepseek":
-        return bool((api_key or DEEPSEEK_API_KEY).strip())
-    return get_client(api_key=api_key) is not None
+    return bool((api_key or "").strip())
 
 
 def generate_text(
@@ -122,7 +119,7 @@ def _deepseek_chat(
     api_key: str | None = None,
     json_mode: bool = False,
 ) -> str:
-    key = (api_key or DEEPSEEK_API_KEY).strip()
+    key = (api_key or "").strip()
     if not key:
         raise AIProviderError(API_KEY_MESSAGE, status_code=503)
 
@@ -149,7 +146,7 @@ def _deepseek_chat(
 
 
 def _deepseek_stream(messages: list[dict[str, str]], api_key: str | None = None) -> Iterator[str]:
-    key = (api_key or DEEPSEEK_API_KEY).strip()
+    key = (api_key or "").strip()
     if not key:
         raise AIProviderError(API_KEY_MESSAGE, status_code=503)
 

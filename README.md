@@ -268,7 +268,7 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r backend/requirements.txt
 cp backend/.env.example backend/.env
-# backend/.env içine GEMINI_API_KEY veya DEEPSEEK_API_KEY ekle
+# AI çağrıları için anahtarı uygulama sidebar'ına gir
 cd backend
 PYTHONPATH=.. uvicorn app.main:app --reload  # :8000
 
@@ -285,14 +285,13 @@ npm run dev                                    # :3000
 
 ```bash
 AI_PROVIDER=gemini                  # veya deepseek
-GEMINI_API_KEY=AIza...
 GEMINI_MODEL=gemini-2.5-flash
-DEEPSEEK_API_KEY=sk-...
+DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-chat
 ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 ```
 
-API anahtarı **frontend'e asla gömülmez**; backend `.env`'inde tutulur ya da sidebar'dan tek-oturum kullanımı için yapıştırılır (`X-Gemini-Api-Key` header'ı).
+API anahtarı **frontend'e gömülmez** ve sunucu `.env`'inden otomatik alınmaz; kullanıcı sidebar'dan tek oturumluk olarak yapıştırır (`X-Gemini-Api-Key` veya `X-DeepSeek-Api-Key` header'ı).
 
 ---
 

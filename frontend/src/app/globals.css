@@ -201,6 +201,36 @@ body.high-contrast {
   opacity: 0;
 }
 
+.sidebar-scroll {
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(124, 92, 255, 0.5) transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgba(124, 92, 255, 0.42);
+  background-clip: content-box;
+}
+
+.dark .sidebar-scroll {
+  scrollbar-color: rgba(150, 125, 255, 0.55) transparent;
+}
+
+.dark .sidebar-scroll::-webkit-scrollbar-thumb {
+  background: rgba(150, 125, 255, 0.45);
+  background-clip: content-box;
+}
+
 /* Loading skeleton shimmer */
 .shimmer {
   background: linear-gradient(
