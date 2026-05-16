@@ -14,9 +14,19 @@ MODE_LABELS = {
 }
 
 
-_MAX_TEXT_PER_DISCLOSURE = 1200
-_MAX_REPORT_TEXT_PER_DISCLOSURE = 6000
-_MAX_TOTAL_PROMPT_CHARS = 18_000
+_MAX_TEXT_PER_DISCLOSURE = 800
+_MAX_REPORT_TEXT_PER_DISCLOSURE = 2200
+_MAX_TOTAL_PROMPT_CHARS = 9_500
+
+
+def _compact_financial_table(rows: list[dict]) -> str:
+    lines: list[str] = []
+    for row in rows[:8]:
+        label = str(row.get("label") or "").strip()
+        values = [str(value).strip() for value in row.get("values", [])[:3] if str(value).strip()]
+        if label and values:
+            lines.append(f"{label}: {' | '.join(values)}")
+    return "\n".join(lines)
 
 
 def compact_disclosures(disclosures: list[dict]) -> str:
@@ -25,6 +35,7 @@ def compact_disclosures(disclosures: list[dict]) -> str:
     for item in disclosures:
         page_text = str(item.get("page_text") or "")[:_MAX_TEXT_PER_DISCLOSURE]
         report_text = str(item.get("report_text") or "")[:_MAX_REPORT_TEXT_PER_DISCLOSURE]
+        financial_table = _compact_financial_table(item.get("financial_table_rows") or [])
         if not report_text and item.get("has_attachment"):
             report_text = (
                 "Bu raporun ek içeriği sistem tarafından okunamadığı için yalnızca KAP bildirimi üzerinden yorum yapabiliyorum."
@@ -36,6 +47,7 @@ def compact_disclosures(disclosures: list[dict]) -> str:
                 f"Kategori: {item.get('category', '')}",
                 f"Konu: {item.get('subject', '')}",
                 f"Kısa özet: {item.get('summary', '')}",
+                f"Öne çıkan finansal satırlar: {financial_table}",
                 f"Metin: {page_text}",
                 f"Rapor eki içeriği: {report_text}",
                 f"Link: {item.get('url', '')}",

@@ -227,7 +227,7 @@ def explain(
         result = explain_disclosures(
             company, disclosures, request.mode, api_key=api_key, provider=provider
         )
-        logger.info("[%s] Gemini summarize: %.2fs", req_id, time.monotonic() - t_gemini)
+        logger.info("[%s] %s summarize: %.2fs", req_id, provider_label(provider), time.monotonic() - t_gemini)
         anomalies_raw = detect_anomalies(disclosures)
         anomalies = [
             AnomalyFlag(icon=icon, title=title, description=description)
