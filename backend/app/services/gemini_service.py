@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 
 from kap_okuryazar.config import DEFAULT_MODEL
+
+logger = logging.getLogger(__name__)
+
+_CLIENT_CACHE: dict[str, object] = {}
 
 
 def _load_genai():
@@ -19,11 +24,16 @@ def get_client(api_key: str | None = None):
     key = (api_key or os.getenv("GEMINI_API_KEY", "")).strip()
     if not key:
         return None
+    if key in _CLIENT_CACHE:
+        return _CLIENT_CACHE[key]
     genai = _load_genai()
     if genai is None:
         return None
     try:
-        return genai.Client(api_key=key)
+        client = genai.Client(api_key=key)
+        _CLIENT_CACHE[key] = client
+        logger.debug("Gemini client created and cached")
+        return client
     except BaseException:
         return None
 
@@ -61,10 +71,19 @@ def test_connection(api_key: str | None = None) -> tuple[bool, str]:
 
 def json_from_text(text: str) -> dict:
     text = (text or "").strip()
-    if text.startswith("```"):
-        text = re.sub(r"^```(?:json)?", "", text, flags=re.I).strip()
-        text = re.sub(r"```$", "", text).strip()
+    # Strip markdown code fences
+    if "```" in text:
+        text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.I | re.M).strip()
+        text = re.sub(r"\s*```\s*$", "", text, flags=re.M).strip()
+    # Extract first JSON object
     match = re.search(r"\{.*\}", text, flags=re.S)
     if match:
         text = match.group(0)
-    return json.loads(text)
+    try:
+        result = json.loads(text)
+        if not isinstance(result, dict):
+            raise ValueError("Expected a JSON object")
+        return result
+    except (json.JSONDecodeError, ValueError) as exc:
+        logger.warning("json_from_text parse error: %s | raw=%s", exc, text[:200])
+        raise

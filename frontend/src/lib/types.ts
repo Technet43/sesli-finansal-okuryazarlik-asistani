@@ -48,9 +48,20 @@ export type ExplainResponse = {
   financialNumbers: FinancialNumber[];
   source: "kap" | "demo" | string;
   disclaimer: string;
+  responseTimeMs?: number;
+  disclosureCount?: number;
 };
 
 export type GeminiTestResponse = {
   ok: boolean;
   message: string;
+};
+
+export type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export type ChatResponse = {
+  reply: string;
 };

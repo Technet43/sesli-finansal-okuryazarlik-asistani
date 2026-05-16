@@ -36,36 +36,40 @@ def extract_financial_numbers(text: str) -> list[tuple[str, str]]:
     return findings
 
 
-def detect_anomalies(disclosures: list[dict]) -> list[tuple[str, str]]:
+def detect_anomalies(disclosures: list[dict]) -> list[tuple[str, str, str]]:
+    """Return list of (icon, title, description) 3-tuples."""
     if not disclosures:
         return []
-    flags: list[tuple[str, str]] = []
+    flags: list[tuple[str, str, str]] = []
 
     if any(d.get("is_late") for d in disclosures):
         late_count = sum(1 for d in disclosures if d.get("is_late"))
-        flags.append(
-            (
-                "⏰ Geç bildirim",
-                f"{late_count} bildirim geç gönderilmiş. " + ANOMALY_RULES["geç_bildirim"],
-            )
-        )
+        flags.append((
+            "⏰",
+            "Geç bildirim",
+            f"{late_count} bildirim geç gönderilmiş. " + ANOMALY_RULES["geç_bildirim"],
+        ))
 
     correctives = sum(1 for d in disclosures if d.get("is_corrective"))
-    if correctives >= 2:
-        flags.append(
-            (
-                "✏️ Çoklu düzeltme",
-                f"{correctives} düzeltme bildirimi. " + ANOMALY_RULES["düzeltme"],
-            )
-        )
+    critical_corrective = any(
+        d.get("is_corrective") and d.get("category") in {"Finansal Rapor", "Sermaye İşlemi", "Özel Durum"}
+        for d in disclosures
+    )
+    if correctives >= 2 or (correctives == 1 and critical_corrective):
+        title = "Kritik düzeltme" if critical_corrective and correctives == 1 else "Çoklu düzeltme"
+        flags.append((
+            "✏️",
+            title,
+            f"{correctives} düzeltme bildirimi. " + ANOMALY_RULES["düzeltme"],
+        ))
 
     sermaye = sum(1 for d in disclosures if d.get("category") == "Sermaye İşlemi")
     if sermaye >= 2:
-        flags.append(("📊 Yoğun sermaye işlemi", ANOMALY_RULES["yoğun_sermaye"]))
+        flags.append(("📊", "Yoğun sermaye işlemi", ANOMALY_RULES["yoğun_sermaye"]))
 
     borc = sum(1 for d in disclosures if d.get("category") == "Borçlanma")
     if borc >= 2:
-        flags.append(("💸 Yoğun borçlanma", ANOMALY_RULES["yoğun_borçlanma"]))
+        flags.append(("💸", "Yoğun borçlanma", ANOMALY_RULES["yoğun_borçlanma"]))
 
     important_no_attach = [
         d
@@ -74,13 +78,11 @@ def detect_anomalies(disclosures: list[dict]) -> list[tuple[str, str]]:
         and not d.get("has_attachment")
     ]
     if important_no_attach:
-        flags.append(
-            (
-                "📎 Eksik ek dosya",
-                f"{len(important_no_attach)} önemli bildirimde ek dosya yok. "
-                + ANOMALY_RULES["ek_eksik"],
-            )
-        )
+        flags.append((
+            "📎",
+            "Eksik ek dosya",
+            f"{len(important_no_attach)} önemli bildirimde ek dosya yok. " + ANOMALY_RULES["ek_eksik"],
+        ))
 
     late_night = 0
     for disclosure in disclosures:
@@ -91,12 +93,11 @@ def detect_anomalies(disclosures: list[dict]) -> list[tuple[str, str]]:
             if hour >= 23 or hour < 6:
                 late_night += 1
     if late_night >= 2:
-        flags.append(
-            (
-                "🌙 Geç saat bildirim",
-                f"{late_night} bildirim gece 23:00-06:00 arasında gönderilmiş; bu olağandışıdır.",
-            )
-        )
+        flags.append((
+            "🌙",
+            "Geç saat bildirim",
+            f"{late_night} bildirim gece 23:00-06:00 arasında gönderilmiş; bu olağandışıdır.",
+        ))
 
     return flags
 

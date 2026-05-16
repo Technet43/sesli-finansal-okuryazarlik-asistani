@@ -51,6 +51,7 @@ export type SpeechRecognitionState = {
 
 export function useSpeechRecognition(lang: string = "tr-TR"): SpeechRecognitionState {
   const recognitionRef = useRef<RecognitionInstance | null>(null);
+  const interimTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isSupported, setIsSupported] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState("");
@@ -87,7 +88,13 @@ export function useSpeechRecognition(lang: string = "tr-TR"): SpeechRecognitionS
           interim += alt.transcript;
         }
       }
-      setTranscript((final || interim).trim());
+      if (final) {
+        if (interimTimerRef.current) clearTimeout(interimTimerRef.current);
+        setTranscript(final.trim());
+      } else if (interim) {
+        if (interimTimerRef.current) clearTimeout(interimTimerRef.current);
+        interimTimerRef.current = setTimeout(() => setTranscript(interim.trim()), 120);
+      }
     };
 
     rec.onerror = (event) => {
@@ -111,6 +118,7 @@ export function useSpeechRecognition(lang: string = "tr-TR"): SpeechRecognitionS
 
     recognitionRef.current = rec;
     return () => {
+      if (interimTimerRef.current) clearTimeout(interimTimerRef.current);
       rec.onstart = null;
       rec.onresult = null;
       rec.onerror = null;

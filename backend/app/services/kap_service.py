@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import logging
 import re
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, timedelta
 from io import BytesIO
 
@@ -20,6 +23,29 @@ from kap_okuryazar.demo_data import DEMO_COMPANY, DEMO_DISCLOSURES
 from kap_okuryazar.models import CompanyMatch
 from kap_okuryazar.text_utils import normalize_tr
 
+logger = logging.getLogger(__name__)
+
+_COMPANY_CACHE: list[dict] = []
+_COMPANY_CACHE_TS: float = 0.0
+_COMPANY_CACHE_TTL: float = 3600.0  # 1 hour
+
+
+def ping_kap() -> bool:
+    try:
+        response = requests.head(
+            KAP_SEARCH_PAGE, headers={"User-Agent": "Mozilla/5.0"}, timeout=5
+        )
+        return response.status_code < 500
+    except Exception:
+        return False
+
+
+def invalidate_company_cache() -> None:
+    global _COMPANY_CACHE, _COMPANY_CACHE_TS
+    _COMPANY_CACHE = []
+    _COMPANY_CACHE_TS = 0.0
+    logger.info("Company cache invalidated")
+
 
 def demo_company() -> CompanyMatch:
     name, ticker, oid = DEMO_COMPANY
@@ -30,9 +56,29 @@ def demo_disclosures(limit: int) -> list[dict]:
     return list(DEMO_DISCLOSURES)[:limit]
 
 
+def _http_get_with_retry(url: str, *, timeout: int, headers: dict, max_retries: int = 2) -> requests.Response:
+    last_exc: Exception | None = None
+    for attempt in range(max_retries + 1):
+        try:
+            response = requests.get(url, headers=headers, timeout=timeout)
+            response.raise_for_status()
+            return response
+        except requests.RequestException as exc:
+            last_exc = exc
+            if attempt < max_retries:
+                time.sleep(0.5 * (attempt + 1))
+    raise last_exc  # type: ignore[misc]
+
+
 def fetch_companies() -> list[dict]:
-    response = requests.get(KAP_SEARCH_PAGE, headers={"User-Agent": "Mozilla/5.0"}, timeout=25)
-    response.raise_for_status()
+    global _COMPANY_CACHE, _COMPANY_CACHE_TS
+    now = time.monotonic()
+    if _COMPANY_CACHE and (now - _COMPANY_CACHE_TS) < _COMPANY_CACHE_TTL:
+        logger.debug("Company list served from cache (%d entries)", len(_COMPANY_CACHE))
+        return _COMPANY_CACHE
+
+    logger.info("Fetching company list from KAP")
+    response = _http_get_with_retry(KAP_SEARCH_PAGE, headers={"User-Agent": "Mozilla/5.0"}, timeout=25)
 
     companies: dict[str, dict] = {}
     for chunk in response.text.split("},{"):
@@ -53,7 +99,11 @@ def fetch_companies() -> list[dict]:
         key = normalize_tr(f"{title} {stock_codes}")
         companies[key] = {"name": title, "ticker": stock_codes, "oid": oid, "search": key}
 
-    return list(companies.values())
+    result = list(companies.values())
+    _COMPANY_CACHE = result
+    _COMPANY_CACHE_TS = now
+    logger.info("Company list cached: %d entries", len(result))
+    return result
 
 
 def resolve_company(query: str) -> CompanyMatch | None:
@@ -110,39 +160,68 @@ def post_kap_disclosure_search(days: int, member_oid: str) -> list[dict]:
         "subjectList": [],
         "disclosureIndexList": [],
     }
-    response = requests.post(KAP_DISCLOSURE_URL, json=payload, headers=KAP_HEADERS, timeout=30)
-    response.raise_for_status()
-    data = response.json()
-    return data if isinstance(data, list) else []
+    for attempt in range(3):
+        response = requests.post(KAP_DISCLOSURE_URL, json=payload, headers=KAP_HEADERS, timeout=30)
+        if response.status_code == 429:
+            wait = 1.5 * (attempt + 1)
+            logger.warning("KAP disclosure search rate-limited, retrying in %.1fs", wait)
+            time.sleep(wait)
+            continue
+        response.raise_for_status()
+        data = response.json()
+        return data if isinstance(data, list) else []
+    logger.error("KAP disclosure search exhausted retries for oid=%s", member_oid)
+    return []
+
+
+def _build_disclosure_entry(row: dict) -> dict:
+    index = row.get("disclosureIndex")
+    url = f"https://www.kap.org.tr/tr/Bildirim/{index}"
+    subject = row.get("subject") or ""
+    page_text = fetch_disclosure_page_text(url)
+    return {
+        "index": index,
+        "publish_datetime": row.get("publishDate") or "",
+        "company_name": row.get("kapTitle") or row.get("memberTitle") or "",
+        "stock_codes": row.get("stockCodes") or "",
+        "subject": subject,
+        "category": classify_disclosure(subject, row.get("summary") or "", page_text),
+        "summary": row.get("summary") or "",
+        "type": row.get("disclosureType") or "",
+        "has_attachment": bool(row.get("attachmentCount")),
+        "is_late": bool(row.get("isLate")),
+        "is_corrective": bool(row.get("modifyStatus")),
+        "url": url,
+        "page_text": page_text,
+        "_order": 0,  # filled below
+    }
 
 
 def fetch_disclosures(member_oid: str, days: int, limit: int) -> list[dict]:
     rows = post_kap_disclosure_search(days=days, member_oid=member_oid)
-    disclosures = []
+    target_rows = rows[:limit]
 
-    for row in rows[:limit]:
-        index = row.get("disclosureIndex")
-        url = f"https://www.kap.org.tr/tr/Bildirim/{index}"
-        subject = row.get("subject") or ""
-        page_text = fetch_disclosure_page_text(url)
-        disclosures.append(
-            {
-                "index": index,
-                "publish_datetime": row.get("publishDate") or "",
-                "company_name": row.get("kapTitle") or row.get("memberTitle") or "",
-                "stock_codes": row.get("stockCodes") or "",
-                "subject": subject,
-                "category": classify_disclosure(subject, row.get("summary") or "", page_text),
-                "summary": row.get("summary") or "",
-                "type": row.get("disclosureType") or "",
-                "has_attachment": bool(row.get("attachmentCount")),
-                "is_late": bool(row.get("isLate")),
-                "is_corrective": bool(row.get("modifyStatus")),
-                "url": url,
-                "page_text": page_text,
-            }
-        )
+    logger.info("Fetching %d disclosures in parallel", len(target_rows))
+    futures: dict = {}
+    with ThreadPoolExecutor(max_workers=min(len(target_rows) or 1, 6)) as pool:
+        for order, row in enumerate(target_rows):
+            fut = pool.submit(_build_disclosure_entry, row)
+            futures[fut] = order
 
+    ordered: list[tuple[int, dict]] = []
+    for fut in as_completed(futures):
+        order = futures[fut]
+        try:
+            entry = fut.result()
+            entry["_order"] = order
+            ordered.append((order, entry))
+        except Exception as exc:
+            logger.warning("Failed to fetch disclosure at position %d: %s", order, exc)
+
+    ordered.sort(key=lambda x: x[0])
+    disclosures = [entry for _, entry in ordered]
+    for d in disclosures:
+        d.pop("_order", None)
     return disclosures
 
 
@@ -161,8 +240,7 @@ def fetch_disclosure_page_text(url: str) -> str:
         return pdf_text
 
     try:
-        response = requests.get(url, timeout=8, headers={"User-Agent": "Mozilla/5.0"})
-        response.raise_for_status()
+        response = _http_get_with_retry(url, timeout=8, headers={"User-Agent": "Mozilla/5.0"})
     except requests.RequestException:
         return ""
 
@@ -179,12 +257,15 @@ def fetch_disclosure_pdf_text(index: str) -> str:
         return ""
     url = f"https://www.kap.org.tr/tr/api/BildirimPdf/{index}"
     try:
-        response = requests.get(url, timeout=8, headers={"User-Agent": "Mozilla/5.0"})
+        response = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+        if response.status_code == 429:
+            logger.warning("KAP PDF rate-limited for index %s", index)
+            return ""
         response.raise_for_status()
-        if len(response.content) > 1_500_000:
+        if len(response.content) > 2_000_000:
             return ""
         reader = PdfReader(BytesIO(response.content))
-        text = " ".join(page.extract_text() or "" for page in reader.pages[:2])
+        text = " ".join(page.extract_text() or "" for page in reader.pages[:3])
         text = re.sub(r"\s+", " ", text).strip()
         return text[:3000]
     except Exception:

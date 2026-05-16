@@ -8,28 +8,36 @@ from app.services.safety_service import clean_advice_language
 
 
 MODE_LABELS = {
-    "simple": "anne-babaya anlatır gibi sade",
-    "professional": "kısa profesyonel özet",
-    "technical": "detaylı teknik açıklama ama yatırım tavsiyesi vermeden",
+    "simple": "sade ve anlaşılır Türkçe, yalın ve net cümleler",
+    "professional": "kısa ve öz profesyonel dil, gerektiğinde finansal terminoloji kullan",
+    "technical": "detaylı teknik analiz, rakamları ve yasal referansları dahil et",
 }
+
+
+_MAX_TEXT_PER_DISCLOSURE = 1200
+_MAX_TOTAL_PROMPT_CHARS = 18_000
 
 
 def compact_disclosures(disclosures: list[dict]) -> str:
     chunks = []
+    total = 0
     for item in disclosures:
-        chunks.append(
-            "\n".join(
-                [
-                    f"Bildirim no: {item.get('index', '')}",
-                    f"Tarih: {item.get('publish_datetime', '')}",
-                    f"Kategori: {item.get('category', '')}",
-                    f"Konu: {item.get('subject', '')}",
-                    f"Kısa özet: {item.get('summary', '')}",
-                    f"Metin: {str(item.get('page_text', ''))[:1300]}",
-                    f"Link: {item.get('url', '')}",
-                ]
-            )
+        page_text = str(item.get("page_text") or "")[:_MAX_TEXT_PER_DISCLOSURE]
+        chunk = "\n".join(
+            [
+                f"Bildirim no: {item.get('index', '')}",
+                f"Tarih: {item.get('publish_datetime', '')}",
+                f"Kategori: {item.get('category', '')}",
+                f"Konu: {item.get('subject', '')}",
+                f"Kısa özet: {item.get('summary', '')}",
+                f"Metin: {page_text}",
+                f"Link: {item.get('url', '')}",
+            ]
         )
+        if total + len(chunk) > _MAX_TOTAL_PROMPT_CHARS:
+            break
+        chunks.append(chunk)
+        total += len(chunk)
     return "\n\n---\n\n".join(chunks)
 
 
@@ -69,27 +77,27 @@ def explain_disclosures(
         return fallback_summary(company, disclosures)
 
     tone = MODE_LABELS.get(mode, MODE_LABELS["simple"])
-    prompt = f"""
-Sen Türkiye'de finansal okuryazarlığı artıran KAP Okuryazar asistanısın.
+    disclosure_count = len(disclosures)
+    prompt = f"""Sen Türkiye'de finansal okuryazarlığı artıran KAP Okuryazar asistanısın.
 KAP bildirimlerini sade Türkçe ile açıkla.
 
 Kesin kurallar:
-- Yatırım tavsiyesi verme.
-- "Al", "sat", "tut", "kesin yükselir", "kesin düşer" deme.
-- Bilmediğin sonucu uydurma.
-- Dil seviyesi: {tone}
-- Sadece geçerli JSON döndür. Markdown kullanma.
+1. Yatırım tavsiyesi verme. "Al", "sat", "tut", "kesin yükselir", "kesin düşer" gibi yönlendirici ifade kullanma.
+2. Bilmediğin bir sonucu uydurma; bilgi yoksa bunu belirt.
+3. Dil seviyesi: {tone}.
+4. Her bildirim için notifications dizisine tam olarak bir giriş ekle ({disclosure_count} bildirim var).
+5. Sadece geçerli JSON döndür. Başına veya sonuna hiçbir açıklama, markdown veya kod bloğu ekleme.
 
-JSON şeması:
+Yanıt formatı (bu şemayı TAM olarak uygula):
 {{
-  "summary": "genel sade açıklama",
+  "summary": "Tüm bildirimlerin {disclosure_count}-5 cümlelik genel sade özeti",
   "notifications": [
     {{
       "date": "YYYY-MM-DD",
-      "title": "bildirim başlığı",
-      "plainText": "sade açıklama",
-      "url": "KAP bildirimi linki (isteğe bağlı)",
-      "category": "bildirim kategorisi (isteğe bağlı)"
+      "title": "kısa bildirim başlığı",
+      "plainText": "bu bildirimin sade açıklaması, 1-3 cümle",
+      "url": "KAP bildirimi tam URL",
+      "category": "bildirim kategorisi"
     }}
   ]
 }}
@@ -98,8 +106,7 @@ JSON şeması:
 Hisse kodu: {company.ticker}
 
 KAP bildirimleri:
-{compact_disclosures(disclosures)}
-"""
+{compact_disclosures(disclosures)}"""
     try:
         response = client.models.generate_content(model=DEFAULT_MODEL, contents=prompt)
         data = json_from_text(response.text or "")

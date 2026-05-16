@@ -1,14 +1,19 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   AlertCircle,
+  Check,
+  ClipboardCopy,
+  Download,
   ExternalLink,
   FileText,
   Loader2,
   Pause,
   Play,
+  RefreshCw,
   Square,
+  Star,
   TrendingUp,
   Volume2,
 } from "lucide-react";
@@ -21,23 +26,98 @@ type ResultsPanelProps = {
   result: ExplainResponse | null;
   loading: boolean;
   error: string;
+  onRetry?: () => void;
+  ttsRate?: number;
+  geminiKey?: string;
+  isFavorite?: boolean;
+  onFavoriteToggle?: () => void;
 };
 
-export function ResultsPanel({ result, loading, error }: ResultsPanelProps) {
-  const tts = useTextToSpeech("tr-TR");
+function buildExportText(result: import("@/lib/types").ExplainResponse): string {
+  const lines: string[] = [
+    `KAP Okuryazar — ${result.company}`,
+    "=".repeat(50),
+    "",
+    result.summary,
+    "",
+  ];
+  if (result.notifications.length > 0) {
+    lines.push("── Bildirimler ──");
+    for (const n of result.notifications) {
+      lines.push(`\n[${n.date ?? ""}] ${n.title}`);
+      if (n.plainText) lines.push(n.plainText);
+      if (n.url) lines.push(n.url);
+    }
+    lines.push("");
+  }
+  if (result.anomalies.length > 0) {
+    lines.push("── Dikkat Noktaları ──");
+    for (const a of result.anomalies) {
+      lines.push(`${a.icon} ${a.title}: ${a.description}`);
+    }
+    lines.push("");
+  }
+  lines.push(result.disclaimer);
+  lines.push(`\nOluşturulma: ${new Date().toLocaleString("tr-TR")}`);
+  return lines.join("\n");
+}
+
+const LOADING_STEPS = [
+  "KAP'tan bildirimler alınıyor...",
+  "Bildirimler analiz ediliyor...",
+  "Yapay zeka sadeleştiriyor...",
+  "Neredeyse hazır...",
+];
+
+export function ResultsPanel({ result, loading, error, onRetry, ttsRate = 0.92, geminiKey, isFavorite = false, onFavoriteToggle }: ResultsPanelProps) {
+  const tts = useTextToSpeech("tr-TR", ttsRate, geminiKey);
+  const [loadingStep, setLoadingStep] = useState(0);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!loading) {
+      setLoadingStep(0);
+      return;
+    }
+    const intervals = [0, 3000, 8000, 18000];
+    const timers = intervals.map((delay, idx) =>
+      setTimeout(() => setLoadingStep(idx), delay)
+    );
+    return () => timers.forEach(clearTimeout);
+  }, [loading]);
 
   const handleSpeak = useCallback(() => {
-    if (result) {
-      tts.speak(result.summary);
-    }
+    if (result) tts.speak(result.summary);
   }, [result, tts]);
+
+  const handleCopy = useCallback(async () => {
+    if (!result) return;
+    const text = buildExportText(result);
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [result]);
+
+  const handleExport = useCallback(() => {
+    if (!result) return;
+    const text = buildExportText(result);
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${result.company.replace(/\s+/g, "_")}_KAP.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [result]);
 
   if (loading) {
     return (
-      <GlassCard className="mx-auto mt-10 w-full max-w-4xl p-7 animate-fade-in">
+      <GlassCard className="mx-auto mt-10 w-full max-w-4xl p-7 animate-fade-in" aria-live="polite" aria-busy="true">
         <div className="flex items-center gap-3 text-sm font-medium text-ink-soft">
           <Loader2 className="h-5 w-5 animate-spin text-iris-indigo" aria-hidden />
-          KAP bildirimleri sadeleştiriliyor
+          <span aria-live="polite" aria-atomic="true">
+            {LOADING_STEPS[loadingStep]}
+          </span>
         </div>
         <div className="mt-7 space-y-3">
           <div className="shimmer h-5 w-2/3 animate-shimmer rounded-full" />
@@ -64,9 +144,19 @@ export function ResultsPanel({ result, loading, error }: ResultsPanelProps) {
     return (
       <GlassCard className="mx-auto mt-10 flex w-full max-w-4xl gap-4 p-6 animate-fade-in">
         <AlertCircle className="h-6 w-6 shrink-0 text-rose-500" aria-hidden />
-        <div className="space-y-1">
+        <div className="min-w-0 flex-1 space-y-1">
           <h2 className="font-semibold text-ink">Analiz hazırlanamadı</h2>
           <p className="text-sm leading-6 text-ink-muted">{error}</p>
+          {onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-iris-indigo hover:underline"
+            >
+              <RefreshCw className="h-3.5 w-3.5" aria-hidden />
+              Tekrar dene
+            </button>
+          )}
         </div>
       </GlassCard>
     );
@@ -92,32 +182,42 @@ export function ResultsPanel({ result, loading, error }: ResultsPanelProps) {
         </div>
         <div className="flex items-center gap-2">
           {tts.isSupported && (
-            <button
-              type="button"
-              onClick={
-                tts.isSpeaking
-                  ? tts.isPaused
-                    ? tts.resume
-                    : tts.pause
-                  : handleSpeak
-              }
-              aria-label={
-                tts.isSpeaking
-                  ? tts.isPaused
-                    ? "Okumaya devam et"
-                    : "Okumayı duraklat"
-                  : "Metni sesli oku"
-              }
-              className="grid h-9 w-9 place-items-center rounded-lg bg-white/70 text-iris-indigo shadow-glass-soft transition hover:bg-white"
-            >
-              {tts.isSpeaking && !tts.isPaused ? (
-                <Pause className="h-4 w-4" aria-hidden />
-              ) : tts.isSpeaking && tts.isPaused ? (
-                <Play className="h-4 w-4" aria-hidden />
-              ) : (
-                <Volume2 className="h-4 w-4" aria-hidden />
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={
+                  tts.isSpeaking
+                    ? tts.isPaused
+                      ? tts.resume
+                      : tts.pause
+                    : handleSpeak
+                }
+                aria-label={
+                  tts.isSpeaking
+                    ? tts.isPaused
+                      ? "Okumaya devam et"
+                      : "Okumayı duraklat"
+                    : tts.isGemini
+                      ? "Gemini sesiyle oku"
+                      : "Metni sesli oku"
+                }
+                title={tts.isGemini ? "Gemini AI sesi" : "Tarayıcı sesi"}
+                className={`grid h-9 w-9 place-items-center rounded-lg shadow-glass-soft transition hover:bg-white ${tts.isGemini ? "bg-iris-indigo/10 text-iris-indigo" : "bg-white/70 text-iris-indigo"}`}
+              >
+                {tts.isSpeaking && !tts.isPaused ? (
+                  <Pause className="h-4 w-4" aria-hidden />
+                ) : tts.isSpeaking && tts.isPaused ? (
+                  <Play className="h-4 w-4" aria-hidden />
+                ) : (
+                  <Volume2 className="h-4 w-4" aria-hidden />
+                )}
+              </button>
+              {geminiKey && !tts.isSpeaking && (
+                <span className="hidden sm:inline text-[10px] font-semibold text-iris-indigo bg-iris-indigo/10 px-1.5 py-0.5 rounded-full">
+                  Gemini
+                </span>
               )}
-            </button>
+            </div>
           )}
           {tts.isSpeaking && (
             <button
@@ -130,6 +230,50 @@ export function ResultsPanel({ result, loading, error }: ResultsPanelProps) {
             </button>
           )}
           <Badge variant={sourceVariant}>{sourceLabel}</Badge>
+          {result.disclosureCount != null && (
+            <span className="text-[11px] text-ink-muted">
+              {result.disclosureCount} bildirim
+            </span>
+          )}
+          {result.responseTimeMs != null && (
+            <span className="text-[11px] text-ink-muted tabular-nums" title="Yanıt süresi">
+              {(result.responseTimeMs / 1000).toFixed(1)}s
+            </span>
+          )}
+          {onFavoriteToggle && (
+            <button
+              type="button"
+              onClick={onFavoriteToggle}
+              aria-label={isFavorite ? "Favoriden çıkar" : "Favorilere ekle"}
+              title={isFavorite ? "Favoriden çıkar" : "Favorilere ekle"}
+              className="grid h-9 w-9 place-items-center rounded-lg bg-white/70 dark:bg-white/10 shadow-glass-soft transition hover:bg-white dark:hover:bg-white/20"
+            >
+              <Star
+                className={`h-4 w-4 transition-colors ${isFavorite ? "fill-amber-400 text-amber-400" : "text-ink-muted"}`}
+                aria-hidden
+              />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => void handleCopy()}
+            aria-label={copied ? "Kopyalandı" : "Özeti kopyala"}
+            title={copied ? "Kopyalandı!" : "Panoya kopyala"}
+            className="grid h-9 w-9 place-items-center rounded-lg bg-white/70 dark:bg-white/10 text-ink-muted shadow-glass-soft transition hover:bg-white dark:hover:bg-white/20"
+          >
+            {copied
+              ? <Check className="h-4 w-4 text-emerald-500" aria-hidden />
+              : <ClipboardCopy className="h-4 w-4" aria-hidden />}
+          </button>
+          <button
+            type="button"
+            onClick={handleExport}
+            aria-label="Metin olarak indir"
+            title=".txt olarak indir"
+            className="grid h-9 w-9 place-items-center rounded-lg bg-white/70 dark:bg-white/10 text-ink-muted shadow-glass-soft transition hover:bg-white dark:hover:bg-white/20"
+          >
+            <Download className="h-4 w-4" aria-hidden />
+          </button>
         </div>
       </header>
 

@@ -39,6 +39,8 @@ class ExplainResponse(BaseModel):
     financialNumbers: list[FinancialNumber]
     source: str
     disclaimer: str
+    responseTimeMs: int | None = None
+    disclosureCount: int | None = None
 
 
 class HealthResponse(BaseModel):
@@ -60,3 +62,29 @@ class StatusResponse(BaseModel):
 class GeminiTestResponse(BaseModel):
     ok: bool
     message: str
+
+
+class TTSRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=4000)
+    voice: str = Field(default="Aoede")
+
+
+class TTSResponse(BaseModel):
+    audio_b64: str
+    format: str = "wav"
+
+
+class ChatMessage(BaseModel):
+    role: str  # "user" or "assistant"
+    content: str
+
+
+class ChatRequest(BaseModel):
+    company: str = Field(..., min_length=1, max_length=120)
+    context: str = Field(default="", max_length=12000)
+    history: list[ChatMessage] = Field(default_factory=list)
+    message: str = Field(..., min_length=1, max_length=1000)
+
+
+class ChatResponse(BaseModel):
+    reply: str

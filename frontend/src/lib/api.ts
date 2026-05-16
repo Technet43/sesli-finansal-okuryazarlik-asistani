@@ -1,4 +1,6 @@
 import type {
+  ChatMessage,
+  ChatResponse,
   ExplainRequest,
   ExplainResponse,
   GeminiTestResponse,
@@ -18,20 +20,22 @@ function authHeaders(apiKey?: string): Record<string, string> {
 
 async function request<T>(
   path: string,
-  init?: RequestInit,
+  init?: RequestInit & { externalSignal?: AbortSignal },
   timeoutMs = DEFAULT_TIMEOUT_MS
 ): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  init?.externalSignal?.addEventListener("abort", () => controller.abort());
 
   try {
+    const { externalSignal: _drop, ...fetchInit } = init ?? {};
     const response = await fetch(`${API_URL}${path}`, {
-      ...init,
+      ...fetchInit,
       signal: controller.signal,
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
-        ...(init?.headers ?? {}),
+        ...(fetchInit?.headers ?? {}),
       },
     });
 
@@ -71,12 +75,14 @@ export function getStatus(apiKey?: string): Promise<SystemStatus> {
 
 export function explainCompany(
   payload: ExplainRequest,
-  apiKey?: string
+  apiKey?: string,
+  signal?: AbortSignal
 ): Promise<ExplainResponse> {
   return request<ExplainResponse>("/api/explain", {
     method: "POST",
     headers: authHeaders(apiKey),
     body: JSON.stringify(payload),
+    externalSignal: signal,
   });
 }
 
@@ -90,4 +96,40 @@ export function testGemini(apiKey?: string): Promise<GeminiTestResponse> {
     },
     20_000
   );
+}
+
+export function sendChat(
+  company: string,
+  context: string,
+  history: ChatMessage[],
+  message: string,
+  apiKey?: string,
+  signal?: AbortSignal
+): Promise<ChatResponse> {
+  return request<ChatResponse>(
+    "/api/chat",
+    {
+      method: "POST",
+      headers: authHeaders(apiKey),
+      body: JSON.stringify({ company, context, history, message }),
+      externalSignal: signal,
+    },
+    30_000
+  );
+}
+
+export async function fetchTTS(text: string, apiKey?: string, voice = "Aoede"): Promise<ArrayBuffer> {
+  const res = await request<{ audio_b64: string; format: string }>(
+    "/api/tts",
+    {
+      method: "POST",
+      headers: authHeaders(apiKey),
+      body: JSON.stringify({ text, voice }),
+    },
+    30_000
+  );
+  const binary = atob(res.audio_b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
 }

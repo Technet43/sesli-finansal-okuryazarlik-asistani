@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { Eye, EyeOff, Loader2, Lock, Moon, ShieldCheck, Sparkles } from "lucide-react";
+import { Eye, EyeOff, Loader2, Lock, Moon, ShieldCheck, Sparkles, Sun, Volume2 } from "lucide-react";
 import type { ExplanationMode, SystemStatus } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +18,8 @@ import { StatusCards } from "./StatusCards";
 type SidebarProps = {
   demoMode: boolean;
   setDemoMode: (value: boolean) => void;
+  darkMode: boolean;
+  setDarkMode: (value: boolean) => void;
   highContrast: boolean;
   setHighContrast: (value: boolean) => void;
   days: number;
@@ -26,6 +28,8 @@ type SidebarProps = {
   setSummaryCount: (value: number) => void;
   mode: ExplanationMode;
   setMode: (value: ExplanationMode) => void;
+  ttsRate: number;
+  setTtsRate: (value: number) => void;
   geminiKey: string;
   setGeminiKey: (value: string) => void;
   onTestGemini: () => void;
@@ -46,6 +50,15 @@ export function Sidebar(props: SidebarProps) {
       </div>
 
       <div className="space-y-5">
+        <ToggleRow
+          icon={props.darkMode
+            ? <Moon className="h-4 w-4 text-iris-indigo" aria-hidden />
+            : <Sun className="h-4 w-4 text-ink-muted" aria-hidden />}
+          label="Karanlık mod"
+          description="Gözleri yormayan koyu tema."
+          checked={props.darkMode}
+          onChange={props.setDarkMode}
+        />
         <ToggleRow
           icon={<Moon className="h-4 w-4 text-ink-muted" aria-hidden />}
           label="Demo modu (offline)"
@@ -81,6 +94,17 @@ export function Sidebar(props: SidebarProps) {
         ticks={[1, 4, 10]}
         onChange={props.setSummaryCount}
       />
+      <RangeControl
+        label="Sesli okuma hızı"
+        value={props.ttsRate}
+        min={0.5}
+        max={1.8}
+        step={0.1}
+        suffix="×"
+        ticks={[0.5, 1, 1.8]}
+        icon={<Volume2 className="h-3.5 w-3.5 text-ink-muted" aria-hidden />}
+        onChange={props.setTtsRate}
+      />
 
       <div className="space-y-2">
         <span id="mode-label" className="text-sm font-semibold text-ink">
@@ -94,9 +118,9 @@ export function Sidebar(props: SidebarProps) {
             <SelectValue placeholder="Seçim yap" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="simple">Anne-babaya anlatır gibi (sade)</SelectItem>
-            <SelectItem value="professional">Kısa profesyonel özet</SelectItem>
-            <SelectItem value="technical">Detaylı teknik açıklama</SelectItem>
+            <SelectItem value="simple">Sade ve anlaşılır</SelectItem>
+            <SelectItem value="professional">Profesyonel özet</SelectItem>
+            <SelectItem value="technical">Detaylı teknik analiz</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -202,6 +226,7 @@ function RangeControl({
   step,
   suffix,
   ticks,
+  icon,
   onChange,
 }: {
   label: string;
@@ -211,15 +236,20 @@ function RangeControl({
   step: number;
   suffix?: string;
   ticks?: number[];
+  icon?: ReactNode;
   onChange: (value: number) => void;
 }) {
+  const displayValue = Number.isInteger(value) ? value : value.toFixed(1);
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between text-sm">
-        <span className="font-semibold text-ink">{label}</span>
+        <span className="flex items-center gap-1.5 font-semibold text-ink">
+          {icon}
+          {label}
+        </span>
         <span className="font-mono text-xs font-semibold text-iris-indigo">
-          {value}
-          {suffix ? ` ${suffix}` : ""}
+          {displayValue}
+          {suffix ? `${suffix}` : ""}
         </span>
       </div>
       <Slider

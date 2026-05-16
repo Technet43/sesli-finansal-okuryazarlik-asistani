@@ -9,6 +9,7 @@ import {
   Search,
   ShieldCheck,
   Sparkles,
+  Star,
   X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +24,8 @@ type HeroSearchProps = {
   loading: boolean;
   history: string[];
   onHistoryClick: (value: string) => void;
+  favorites?: string[];
+  onFavoriteToggle?: (value: string) => void;
 };
 
 export function HeroSearch({
@@ -32,6 +35,8 @@ export function HeroSearch({
   loading,
   history,
   onHistoryClick,
+  favorites = [],
+  onFavoriteToggle,
 }: HeroSearchProps) {
   const speech = useSpeechRecognition("tr-TR");
 
@@ -158,26 +163,67 @@ export function HeroSearch({
           <ChevronRight className="h-5 w-5 text-ink-muted" aria-hidden />
         </button>
 
-        <div className="mt-6 flex justify-center">
+        <div className="mt-6 flex flex-col items-center gap-2">
           <Button
             type="submit"
             variant="gradient"
             size="lg"
             className="min-w-64"
             disabled={loading || !company.trim()}
+            title="Ctrl+Enter ile de gönderebilirsin"
           >
             <Sparkles className="h-4 w-4" aria-hidden />
             {loading ? "Anlatılıyor..." : "Anlat"}
           </Button>
+          <span className="text-[11px] text-ink-muted">
+            <kbd className="rounded border border-slate-200 bg-white/70 px-1 py-0.5 font-mono text-[10px]">Ctrl</kbd>
+            {" + "}
+            <kbd className="rounded border border-slate-200 bg-white/70 px-1 py-0.5 font-mono text-[10px]">Enter</kbd>
+            {" ile hızlı gönder"}
+          </span>
         </div>
       </form>
 
-      {history.length > 0 ? (
+      {favorites.length > 0 ? (
         <div className="mt-10 w-full">
           <div className="flex items-center gap-4 text-xs font-medium uppercase tracking-[0.16em] text-ink-muted">
-            <span className="h-px flex-1 bg-slate-200/80" />
+            <span className="h-px flex-1 bg-slate-200/80 dark:bg-slate-700/60" />
+            Favoriler
+            <span className="h-px flex-1 bg-slate-200/80 dark:bg-slate-700/60" />
+          </div>
+          <div className="mt-4 flex flex-wrap justify-center gap-2.5">
+            {favorites.map((item) => (
+              <div key={item} className="group relative inline-flex">
+                <button
+                  type="button"
+                  onClick={() => onHistoryClick(item)}
+                  className="inline-flex h-9 items-center gap-2 rounded-full border border-amber-300/60 bg-amber-50/70 dark:bg-amber-900/20 dark:border-amber-500/30 px-3.5 text-sm font-medium text-ink shadow-glass-soft backdrop-blur transition hover:-translate-y-0.5 hover:bg-amber-50"
+                >
+                  <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" aria-hidden />
+                  {item}
+                </button>
+                {onFavoriteToggle && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onFavoriteToggle(item); }}
+                    aria-label="Favoriden çıkar"
+                    className="absolute -right-1.5 -top-1.5 hidden h-5 w-5 place-items-center rounded-full bg-white dark:bg-slate-800 shadow text-ink-muted transition hover:text-rose-500 group-hover:grid"
+                  >
+                    <X className="h-3 w-3" aria-hidden />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {history.length > 0 ? (
+        <div className="mt-6 w-full">
+          <div className="flex items-center gap-4 text-xs font-medium uppercase tracking-[0.16em] text-ink-muted">
+            <span className="h-px flex-1 bg-slate-200/80 dark:bg-slate-700/60" />
             Geçmiş aramalar
-            <span className="h-px flex-1 bg-slate-200/80" />
+            <span className="h-px flex-1 bg-slate-200/80 dark:bg-slate-700/60" />
           </div>
           <div className="mt-4 flex flex-wrap justify-center gap-2.5">
             {history.map((item) => (
@@ -185,7 +231,7 @@ export function HeroSearch({
                 key={item}
                 type="button"
                 onClick={() => onHistoryClick(item)}
-                className="inline-flex h-9 items-center gap-2 rounded-full border border-white/70 bg-white/55 px-3.5 text-sm font-medium text-ink shadow-glass-soft backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/75"
+                className="inline-flex h-9 items-center gap-2 rounded-full border border-white/70 dark:border-white/10 bg-white/55 dark:bg-white/5 px-3.5 text-sm font-medium text-ink shadow-glass-soft backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/75"
               >
                 <Clock className="h-3.5 w-3.5 text-ink-muted" aria-hidden />
                 {item}
