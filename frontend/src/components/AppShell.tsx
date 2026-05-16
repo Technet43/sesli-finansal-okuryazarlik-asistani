@@ -240,6 +240,15 @@ export function AppShell() {
     try { window.localStorage.setItem(HISTORY_KEY, JSON.stringify(next)); } catch { /* ignore */ }
   }
 
+  function selectedProviderKeyMissing(): boolean {
+    if (demoMode) return false;
+    return effectiveAiProvider === "deepseek" ? !deepseekKey.trim() : !geminiKey.trim();
+  }
+
+  function selectedProviderKeyMessage(): string {
+    return `${effectiveAiProvider === "deepseek" ? "DeepSeek" : "Gemini"} analizi için API key gerekli. Sidebar'dan kendi anahtarını gir veya demo modunu aç.`;
+  }
+
   async function fetchFor(
     companyName: string,
     abortCtrl: React.MutableRefObject<AbortController | null>,
@@ -250,6 +259,14 @@ export function AppShell() {
   ) {
     const clean = companyName.trim();
     if (!clean) return;
+    if (selectedProviderKeyMissing()) {
+      abortCtrl.current?.abort();
+      setLoad(false);
+      setRes(null);
+      setErr(selectedProviderKeyMessage());
+      rememberSearch(clean);
+      return;
+    }
     abortCtrl.current?.abort();
     const controller = new AbortController();
     abortCtrl.current = controller;
