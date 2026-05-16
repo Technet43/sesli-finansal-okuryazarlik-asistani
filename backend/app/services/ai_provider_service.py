@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 API_LIMIT_MESSAGE = "API kullanım limiti doldu. Lütfen birkaç dakika bekleyip tekrar deneyin."
 API_KEY_MESSAGE = "API anahtarı bulunamadı. Lütfen ayarlardan kendi API anahtarını gir."
+DEEPSEEK_TIMEOUT_SECONDS = 120
 
 
 class AIProviderError(Exception):
@@ -136,7 +137,7 @@ def _deepseek_chat(
             f"{DEEPSEEK_BASE_URL}/chat/completions",
             headers=_deepseek_headers(key),
             json=payload,
-            timeout=60,
+            timeout=DEEPSEEK_TIMEOUT_SECONDS,
         )
     except requests.RequestException as exc:
         raise AIProviderError(f"DeepSeek bağlantı hatası: {str(exc)[:220]}", status_code=502) from exc
@@ -160,7 +161,7 @@ def _deepseek_stream(messages: list[dict[str, str]], api_key: str | None = None)
                 "temperature": 0.2,
                 "stream": True,
             },
-            timeout=60,
+            timeout=DEEPSEEK_TIMEOUT_SECONDS,
             stream=True,
         )
     except requests.RequestException as exc:

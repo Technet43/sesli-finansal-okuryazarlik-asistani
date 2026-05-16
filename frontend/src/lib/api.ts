@@ -13,6 +13,7 @@ const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").rep
   ""
 );
 const DEFAULT_TIMEOUT_MS = 60_000;
+const ANALYSIS_TIMEOUT_MS = 180_000;
 
 export type AiRequestOptions = {
   provider?: AiProvider;
@@ -64,7 +65,7 @@ async function request<T>(
     return (await response.json()) as T;
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
-      throw new Error("İstek zaman aşımına uğradı. Backend yavaş cevap veriyor olabilir.");
+      throw new Error("Analiz zaman aşımına uğradı. Render free backend, KAP veya AI yavaş cevap veriyor olabilir; lütfen tekrar dene.");
     }
     if (error instanceof TypeError) {
       throw new Error(
@@ -90,12 +91,16 @@ export function explainCompany(
   options?: AiRequestOptions,
   signal?: AbortSignal
 ): Promise<ExplainResponse> {
-  return request<ExplainResponse>("/api/explain", {
-    method: "POST",
-    headers: aiHeaders(options),
-    body: JSON.stringify(payload),
-    externalSignal: signal,
-  });
+  return request<ExplainResponse>(
+    "/api/explain",
+    {
+      method: "POST",
+      headers: aiHeaders(options),
+      body: JSON.stringify(payload),
+      externalSignal: signal,
+    },
+    ANALYSIS_TIMEOUT_MS
+  );
 }
 
 export function testGemini(options?: AiRequestOptions): Promise<GeminiTestResponse> {
