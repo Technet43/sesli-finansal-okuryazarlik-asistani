@@ -66,7 +66,7 @@ app = FastAPI(title="KAP Okuryazar API", version="0.1.0")
 # ── Simple in-memory rate limiter (no extra deps) ──────────────────────────
 _rl_lock = Lock()
 _rl_buckets: dict[str, list[float]] = defaultdict(list)
-_RL_LIMIT = 10       # max requests
+_RL_LIMIT = 20       # max requests
 _RL_WINDOW = 60.0    # per N seconds
 
 
@@ -84,8 +84,23 @@ def _selected_api_key(
     return gemini_key
 
 
-def _rate_limit(request: Request, limit: int = _RL_LIMIT, window: float = _RL_WINDOW) -> None:
-    ip = request.client.host if request.client else "unknown"
+def _client_id(request: Request) -> str:
+    forwarded_for = request.headers.get("x-forwarded-for", "")
+    if forwarded_for:
+        return forwarded_for.split(",", 1)[0].strip()
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip:
+        return real_ip.strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _rate_limit(
+    request: Request,
+    limit: int = _RL_LIMIT,
+    window: float = _RL_WINDOW,
+    label: str = "istek",
+) -> None:
+    ip = _client_id(request)
     now = time.monotonic()
     with _rl_lock:
         bucket = _rl_buckets[ip]
@@ -93,7 +108,7 @@ def _rate_limit(request: Request, limit: int = _RL_LIMIT, window: float = _RL_WI
         if len(_rl_buckets[ip]) >= limit:
             raise HTTPException(
                 status_code=429,
-                detail=f"Çok fazla istek. {window:.0f} saniye içinde en fazla {limit} analiz yapabilirsin.",
+                detail=f"Çok fazla {label}. {window:.0f} saniye içinde en fazla {limit} kez deneyebilirsin.",
             )
         _rl_buckets[ip].append(now)
 
@@ -199,7 +214,7 @@ def explain(
     x_deepseek_api_key: str | None = Header(default=None, alias="X-DeepSeek-Api-Key"),
     x_ai_provider: str | None = Header(default=None, alias="X-AI-Provider"),
 ) -> ExplainResponse:
-    _rate_limit(http_request)
+    _rate_limit(http_request, label="analiz isteği")
     provider = _selected_provider(x_ai_provider)
     api_key = _selected_api_key(provider, x_gemini_api_key, x_deepseek_api_key)
     req_id = str(uuid.uuid4())[:8]
