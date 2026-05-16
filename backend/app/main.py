@@ -3,12 +3,15 @@ from __future__ import annotations
 import logging
 import time
 import uuid
+from base64 import b64decode
 from collections import defaultdict
+from hmac import compare_digest
 from threading import Lock
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse
 
 logging.basicConfig(
     level=logging.INFO,
@@ -19,7 +22,18 @@ from app.core.bootstrap import ensure_repo_root_on_path
 
 ensure_repo_root_on_path()
 
-from app.core.config import ALLOWED_ORIGIN_REGEX, ALLOWED_ORIGINS, DISCLAIMER, GEMINI_MODEL, SERVICE_NAME  # noqa: E402
+from app.core.config import (  # noqa: E402
+    ADMIN_API_TOKEN,
+    ALLOWED_ORIGIN_REGEX,
+    ALLOWED_ORIGINS,
+    DISCLAIMER,
+    GEMINI_MODEL,
+    MAX_AUDIO_BYTES,
+    MAX_JSON_BODY_BYTES,
+    MAX_UPLOAD_BYTES,
+    SERVICE_NAME,
+    TRUST_PROXY_HEADERS,
+)
 from app.models.schemas import (  # noqa: E402
     AnomalyFlag,
     ChatRequest,
@@ -68,6 +82,14 @@ _rl_lock = Lock()
 _rl_buckets: dict[str, list[float]] = defaultdict(list)
 _RL_LIMIT = 20       # max requests
 _RL_WINDOW = 60.0    # per N seconds
+_ALLOWED_CHAT_FILE_MIMES = {
+    "application/pdf",
+    "text/plain",
+    "image/png",
+    "image/jpeg",
+    "image/webp",
+}
+_ALLOWED_AUDIO_MIME_PREFIXES = ("audio/",)
 
 
 def _selected_provider(value: str | None) -> str:
@@ -85,12 +107,13 @@ def _selected_api_key(
 
 
 def _client_id(request: Request) -> str:
-    forwarded_for = request.headers.get("x-forwarded-for", "")
-    if forwarded_for:
-        return forwarded_for.split(",", 1)[0].strip()
-    real_ip = request.headers.get("x-real-ip")
-    if real_ip:
-        return real_ip.strip()
+    if TRUST_PROXY_HEADERS:
+        forwarded_for = request.headers.get("x-forwarded-for", "")
+        if forwarded_for:
+            return forwarded_for.split(",", 1)[0].strip()
+        real_ip = request.headers.get("x-real-ip")
+        if real_ip:
+            return real_ip.strip()
     return request.client.host if request.client else "unknown"
 
 
@@ -111,6 +134,47 @@ def _rate_limit(
                 detail=f"Çok fazla {label}. {window:.0f} saniye içinde en fazla {limit} kez deneyebilirsin.",
             )
         _rl_buckets[ip].append(now)
+
+
+def _decode_b64_payload(value: str, *, max_bytes: int, label: str) -> bytes:
+    try:
+        payload = b64decode(value, validate=True)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"{label} base64 formatı geçersiz.") from exc
+    if len(payload) > max_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"{label} boyutu çok büyük. En fazla {max_bytes // 1_000_000} MB desteklenir.",
+        )
+    return payload
+
+
+def _require_admin_token(token: str | None) -> None:
+    if not ADMIN_API_TOKEN:
+        raise HTTPException(status_code=403, detail="Admin endpoint kapalı. ADMIN_API_TOKEN ayarla.")
+    if not token or not compare_digest(token, ADMIN_API_TOKEN):
+        raise HTTPException(status_code=403, detail="Admin yetkisi gerekli.")
+
+
+@app.middleware("http")
+async def security_and_size_middleware(request: Request, call_next):
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > MAX_JSON_BODY_BYTES:
+                return JSONResponse(
+                    status_code=413,
+                    content={"detail": f"İstek gövdesi çok büyük. En fazla {MAX_JSON_BODY_BYTES // 1_000_000} MB desteklenir."},
+                )
+        except ValueError:
+            return JSONResponse(status_code=400, content={"detail": "Content-Length değeri geçersiz."})
+
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault("Permissions-Policy", "camera=(), geolocation=(), microphone=()")
+    return response
 
 
 @app.on_event("startup")
@@ -184,7 +248,12 @@ def test_gemini(
 
 
 @app.post("/api/cache/clear")
-def clear_cache() -> dict:
+def clear_cache(
+    http_request: Request,
+    x_admin_token: str | None = Header(default=None, alias="X-Admin-Token"),
+) -> dict:
+    _rate_limit(http_request, limit=5, window=300.0, label="admin isteği")
+    _require_admin_token(x_admin_token)
     invalidate_company_cache()
     logger.info("Company cache cleared via API")
     return {"ok": True, "message": "Şirket listesi önbelleği temizlendi."}
@@ -361,15 +430,14 @@ Kullanıcının son mesajı sadece "hey", "merhaba", "selam", "teşekkürler", "
 
     # Handle file attachment
     if request.file_b64 and request.file_mime:
-        import base64 as b64_mod
-        try:
-            file_bytes = b64_mod.b64decode(request.file_b64)
-            from google.genai import types as gtypes  # type: ignore
-            file_part = gtypes.Part.from_bytes(data=file_bytes, mime_type=request.file_mime)
-            text_part = {"text": f"[Kullanıcı bir dosya yükledi: {request.file_mime}]\n{request.message}"}
-            contents.append({"role": "user", "parts": [file_part, text_part]})
-        except Exception:
-            contents.append({"role": "user", "parts": [{"text": request.message}]})
+        mime_type = request.file_mime.split(";", 1)[0].strip().lower()
+        if mime_type not in _ALLOWED_CHAT_FILE_MIMES:
+            raise HTTPException(status_code=415, detail="Sadece PDF, TXT, PNG, JPG veya WEBP dosyası desteklenir.")
+        file_bytes = _decode_b64_payload(request.file_b64, max_bytes=MAX_UPLOAD_BYTES, label="Dosya")
+        from google.genai import types as gtypes  # type: ignore
+        file_part = gtypes.Part.from_bytes(data=file_bytes, mime_type=mime_type)
+        text_part = {"text": f"[Kullanıcı bir dosya yükledi: {mime_type}]\n{request.message}"}
+        contents.append({"role": "user", "parts": [file_part, text_part]})
     else:
         contents.append({"role": "user", "parts": [{"text": request.message}]})
 
@@ -456,20 +524,20 @@ async def transcribe_audio(
     x_gemini_api_key: str | None = Header(default=None, alias="X-Gemini-Api-Key"),
 ) -> dict:
     _rate_limit(http_request, limit=20, window=60.0)
-    import base64 as b64_mod
-
     client = get_client(api_key=x_gemini_api_key)
     if client is None:
         raise HTTPException(status_code=503, detail="Transkripsiyon için Gemini API key gerekli.")
 
     body = await http_request.json()
     audio_b64 = body.get("audio_b64", "")
-    mime_type = body.get("mime_type", "audio/webm")
+    mime_type = str(body.get("mime_type", "audio/webm")).split(";", 1)[0].strip().lower()
     if not audio_b64:
         raise HTTPException(status_code=422, detail="audio_b64 gerekli.")
+    if not any(mime_type.startswith(prefix) for prefix in _ALLOWED_AUDIO_MIME_PREFIXES):
+        raise HTTPException(status_code=415, detail="Sadece ses dosyası desteklenir.")
 
+    audio_bytes = _decode_b64_payload(audio_b64, max_bytes=MAX_AUDIO_BYTES, label="Ses kaydı")
     try:
-        audio_bytes = b64_mod.b64decode(audio_b64)
         from google.genai import types as gtypes  # type: ignore
         response = client.models.generate_content(
             model=GEMINI_MODEL,

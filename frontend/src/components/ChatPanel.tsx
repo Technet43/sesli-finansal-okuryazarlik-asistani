@@ -25,6 +25,15 @@ type AttachedFile = {
   sizeLabel: string;
 };
 
+const MAX_ATTACHMENT_BYTES = 7_000_000;
+const ALLOWED_ATTACHMENT_TYPES = new Set([
+  "application/pdf",
+  "text/plain",
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+]);
+
 function buildContext(result: ExplainResponse): string {
   const lines: string[] = [`Şirket: ${result.company}`, `Özet: ${result.summary}`];
 
@@ -84,6 +93,12 @@ function fileSizeLabel(bytes: number): string {
 }
 
 async function readFileAsB64(file: File): Promise<AttachedFile> {
+  if (file.size > MAX_ATTACHMENT_BYTES) {
+    throw new Error("Dosya çok büyük. En fazla 7 MB desteklenir.");
+  }
+  if (!ALLOWED_ATTACHMENT_TYPES.has(file.type || "")) {
+    throw new Error("Sadece PDF, TXT, PNG, JPG veya WEBP dosyası eklenebilir.");
+  }
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
@@ -186,8 +201,8 @@ export function ChatPanel({ result, aiProvider, geminiKey, deepseekKey, aiConnec
     try {
       const attached = await readFileAsB64(file);
       setAttachment(attached);
-    } catch {
-      setError("Dosya okunamadı.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Dosya okunamadı.");
     }
   }, []);
 

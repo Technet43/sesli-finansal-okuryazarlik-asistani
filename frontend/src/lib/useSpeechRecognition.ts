@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { transcribeAudio } from "./api";
 
+const MAX_RECORDING_MS = 60_000;
+
 type RecognitionAlternative = { transcript: string };
 type RecognitionResult = ArrayLike<RecognitionAlternative> & { isFinal: boolean };
 type RecognitionResultList = ArrayLike<RecognitionResult>;
@@ -38,12 +40,20 @@ export function useSpeechRecognition(lang: string = "tr-TR", geminiKey?: string)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const interimTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recordingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isSupported, setIsSupported] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [error, setError] = useState("");
 
   const useGemini = !!geminiKey?.trim();
+
+  useEffect(() => {
+    return () => {
+      if (recordingTimerRef.current) clearTimeout(recordingTimerRef.current);
+      try { mediaRecorderRef.current?.stop(); } catch { /* ignore */ }
+    };
+  }, []);
 
   // Set up browser recognition (used when no gemini key)
   useEffect(() => {
@@ -107,6 +117,10 @@ export function useSpeechRecognition(lang: string = "tr-TR", geminiKey?: string)
           chunksRef.current = [];
           mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
           mr.onstop = () => {
+            if (recordingTimerRef.current) {
+              clearTimeout(recordingTimerRef.current);
+              recordingTimerRef.current = null;
+            }
             stream.getTracks().forEach((t) => t.stop());
             const blob = new Blob(chunksRef.current, { type: "audio/webm" });
             setIsListening(false);
@@ -115,6 +129,9 @@ export function useSpeechRecognition(lang: string = "tr-TR", geminiKey?: string)
               .catch((err: unknown) => setError(err instanceof Error ? err.message : "Transkripsiyon hatası."));
           };
           mr.start();
+          recordingTimerRef.current = setTimeout(() => {
+            if (mr.state === "recording") mr.stop();
+          }, MAX_RECORDING_MS);
           mediaRecorderRef.current = mr;
           setIsListening(true);
         })
@@ -129,6 +146,10 @@ export function useSpeechRecognition(lang: string = "tr-TR", geminiKey?: string)
 
   const stop = useCallback(() => {
     if (useGemini) {
+      if (recordingTimerRef.current) {
+        clearTimeout(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
       mediaRecorderRef.current?.stop();
     } else {
       recognitionRef.current?.stop();

@@ -14,6 +14,7 @@ const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").rep
 );
 const DEFAULT_TIMEOUT_MS = 60_000;
 const ANALYSIS_TIMEOUT_MS = 180_000;
+const MAX_AUDIO_BYTES = 5_000_000;
 
 export type AiRequestOptions = {
   provider?: AiProvider;
@@ -184,6 +185,9 @@ export async function* streamChat(
 }
 
 export async function transcribeAudio(audioBlob: Blob, apiKey?: string): Promise<string> {
+  if (audioBlob.size > MAX_AUDIO_BYTES) {
+    throw new Error("Ses kaydı çok uzun. Lütfen daha kısa bir kayıt dene.");
+  }
   const buffer = await audioBlob.arrayBuffer();
   const bytes = new Uint8Array(buffer);
   let binary = "";

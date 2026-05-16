@@ -132,9 +132,12 @@ Bağlama gönderilen veri:
 ### 🛡️ Güvenlik Katmanı
 
 - `safety_service.clean_advice_language` — "al, sat, kesin yükselir" gibi yönlendirici ifadeleri regex ile temizler
-- Rate-limit (`/api/explain`: 10 req/dak, chat: 30 req/dak)
+- Rate-limit (`/api/explain`, chat, TTS, STT ve admin endpointleri)
 - API anahtarı **frontend'e gömülmez**; gerekirse `X-Gemini-Api-Key` header'ı ile per-request bypass
-- KAP'a `User-Agent`, attachment'larda boyut limiti (5 MB), zaman aşımı (15 sn)
+- Açık admin endpoint yok: `/api/cache/clear` için `ADMIN_API_TOKEN` gerekir
+- Proxy IP header'ları yalnızca `TRUST_PROXY_HEADERS=true` ise kullanılır; böylece rate-limit kolayca bypass edilemez
+- KAP'a `User-Agent`, attachment/audio ve JSON body boyut limitleri, zaman aşımı (15 sn)
+- Frontend ve backend güvenlik header'ları: `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`
 
 ### 📊 "Finansal Veriler" Görsel Paneli
 
