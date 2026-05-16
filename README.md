@@ -2,6 +2,21 @@
 
 Türkiye'deki şirketlerin KAP bildirimlerini sade Türkçe ile anlatan finansal okuryazarlık asistanı. Amaç yatırım tavsiyesi vermek değil, resmi açıklamaları herkesin anlayacağı dile çevirmek.
 
+## Öne çıkan özellikler
+
+- **KAP HTML tablo çıkarımı**: Finansal raporların HTML sayfasındaki tablo satırlarını
+  (Nakit ve Nakit Benzerleri, Toplam Varlıklar, Özkaynak, Net Dönem Kârı, Faiz Geliri,
+  Nakit Akışı vb.) etiket + dönem değerleri olarak yapısal şekilde çıkarır. Ek dosya
+  PDF okunamasa bile finansal değerler AI bağlamına girer.
+- **Finansal Veriler paneli**: Sonuç ekranında, raporlardaki anahtar finansal kalemleri
+  cari/önceki dönemler ile birlikte tablo halinde görsel olarak gösterir.
+- **Çapraz referanslı chat AI**: Kullanıcı belirli bir bildirimi (örn. sorumluluk
+  beyanı) sorduğunda, aynı dönemin finansal raporundaki ilgili sayıları çekip
+  yüzde kıyaslamasıyla aktarır. "Bu bildirimde yok" cevabı yerine eğitici, sayısal
+  ve dönem karşılaştırmalı analitik yanıt verir.
+- **Eğitici Türkçe sadeleştirme**: KAP terminolojisini ve finansal kavramları
+  yatırım tavsiyesi vermeden açıklar.
+
 ## Mimarisi
 
 | Katman | Teknoloji | Konum |
@@ -68,9 +83,13 @@ Adres: `http://localhost:8000`
 | Method | Path | Açıklama |
 |---|---|---|
 | GET | `/health` | Sağlık kontrolü |
-| GET | `/api/status` | KAP ve Gemini durumu |
-| POST | `/api/explain` | Bildirimleri sadeleştir |
-| POST | `/api/test-gemini` | Gemini API bağlantı testi |
+| GET | `/api/status` | KAP ve AI sağlayıcı durumu |
+| POST | `/api/explain` | Bildirimleri sadeleştir, finansal tablo verisini çıkar |
+| POST | `/api/chat` | Şirket bağlamında AI sohbet (çapraz referanslı) |
+| POST | `/api/chat/stream` | Aynı sohbet, SSE ile streaming |
+| POST | `/api/tts` | Gemini text-to-speech |
+| POST | `/api/transcribe/audio` | Gemini ile ses transkripsiyonu |
+| POST | `/api/test-gemini` | AI sağlayıcı bağlantı testi |
 
 `POST /api/explain` örneği:
 
@@ -91,12 +110,34 @@ Cevap:
   "company": "...",
   "summary": "Sade açıklama metni...",
   "notifications": [
-    { "date": "2026-01-01", "title": "...", "plainText": "..." }
+    {
+      "date": "2026-05-12",
+      "title": "Konsolide Finansal Rapor",
+      "plainText": "...",
+      "category": "Finansal Rapor",
+      "reportText": "KAP HTML tablo verisi: ...",
+      "reportTextSource": "TCZB KONSOLIDE 31.03.2026.pdf + KAP HTML tablosu",
+      "financialTable": [
+        { "label": "Nakit ve Nakit Benzerleri",
+          "values": ["610.862.836", "1.159.207.336", "1.770.070.172", "829.612.210"] },
+        { "label": "Özkaynaklar",
+          "values": ["762.192.002", "-12.798.125", "749.393.877", "722.265.964"] },
+        { "label": "Net Dönem Kârı/Zararı",
+          "values": ["50.957.673", "0", "50.957.673", "179.645.756"] }
+      ]
+    }
   ],
+  "anomalies": [],
+  "financialNumbers": [],
   "source": "kap",
   "disclaimer": "Bu çıktı yatırım tavsiyesi değildir."
 }
 ```
+
+`financialTable`: KAP bildirim sayfasındaki tablonun yapısal çıkarımı. Sütun
+sırası bildirimde göründüğü dönem sırasına (cari → önceki, konsolide → bireysel
+vb.) karşılık gelir. Birim genelde `bin TL`'dir; her bildirim kendi para
+birimini belirtir.
 
 CORS izni `ALLOWED_ORIGINS` env'i ile kontrol edilir (varsayılan `http://localhost:3000,http://127.0.0.1:3000`).
 
@@ -142,22 +183,20 @@ frontend/
       Header.tsx
       Sidebar.tsx
       HeroSearch.tsx
-      ResultsPanel.tsx
+      ResultsPanel.tsx        # Özet + Finansal Veriler tablosu + bildirim kartları
+      ChatPanel.tsx           # KAP bağlamında çapraz referanslı sohbet
+      ComparisonPanel.tsx     # İki şirket kıyaslama
       StatusCards.tsx
       GlassCard.tsx
       ui/
-        button.tsx
-        switch.tsx
-        slider.tsx
-        select.tsx
-        input.tsx
-        card.tsx
-        badge.tsx
-        tooltip.tsx
+        button.tsx, switch.tsx, slider.tsx, select.tsx,
+        input.tsx, card.tsx, badge.tsx, tooltip.tsx
     lib/
       api.ts
       types.ts
       utils.ts
+      useTextToSpeech.ts      # Web Speech API / Gemini TTS köprüsü
+      useSpeechRecognition.ts # Web Speech API / Gemini STT köprüsü
 ```
 
 ## Eski Streamlit demosu
