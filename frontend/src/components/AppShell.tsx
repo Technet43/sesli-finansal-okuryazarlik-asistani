@@ -10,6 +10,7 @@ import { ResultsPanel } from "./ResultsPanel";
 import { ComparisonPanel } from "./ComparisonPanel";
 import { ChatPanel } from "./ChatPanel";
 import { Sidebar } from "./Sidebar";
+import { TermsConsentModal } from "./TermsConsentModal";
 
 const DEFAULT_HISTORY = [
   "Türk Hava Yolları",
@@ -53,6 +54,7 @@ export function AppShell() {
   const [errorB, setErrorB] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingB, setLoadingB] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
   const abortRefB = useRef<AbortController | null>(null);
@@ -346,6 +348,7 @@ export function AppShell() {
 
   return (
     <main className="min-h-screen px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
+      {!termsAccepted && <TermsConsentModal onAccept={() => setTermsAccepted(true)} />}
       <div className="mx-auto flex max-w-[1500px] flex-col gap-6">
         <Header />
 

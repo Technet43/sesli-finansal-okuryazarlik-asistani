@@ -14,7 +14,10 @@ AI_PROVIDER = os.getenv("AI_PROVIDER", "gemini").strip().lower()
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
 DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com").strip().rstrip("/")
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat").strip()
-DISCLAIMER = "Bu çıktı yatırım tavsiyesi değildir."
+DISCLAIMER = (
+    "Bu çıktı yatırım tavsiyesi değildir. Resmi KAP bildirimi, şirket raporları ve "
+    "yetkili kaynaklar kontrol edilmeden yatırım veya finansal karar verilmemelidir."
+)
 
 _DEFAULT_ORIGINS = "http://localhost:3000,http://127.0.0.1:3000"
 ALLOWED_ORIGINS = [
