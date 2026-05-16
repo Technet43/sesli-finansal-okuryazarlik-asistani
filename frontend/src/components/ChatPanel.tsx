@@ -7,12 +7,14 @@ import { Bot, Loader2, MessageSquare, Paperclip, RotateCcw, Send, User, X } from
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import { streamChat } from "@/lib/api";
-import type { ChatMessage, ExplainResponse } from "@/lib/types";
+import type { AiProvider, ChatMessage, ExplainResponse } from "@/lib/types";
 import { GlassCard } from "./GlassCard";
 
 type ChatPanelProps = {
   result: ExplainResponse;
+  aiProvider: AiProvider;
   geminiKey?: string;
+  deepseekKey?: string;
   aiConnected?: boolean;
 };
 
@@ -94,7 +96,7 @@ async function readFileAsB64(file: File): Promise<AttachedFile> {
   });
 }
 
-export function ChatPanel({ result, geminiKey, aiConnected = false }: ChatPanelProps) {
+export function ChatPanel({ result, aiProvider, geminiKey, deepseekKey, aiConnected = false }: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -145,7 +147,7 @@ export function ChatPanel({ result, geminiKey, aiConnected = false }: ChatPanelP
           context,
           historySnapshot,
           msg,
-          geminiKey,
+          { provider: aiProvider, geminiKey, deepseekKey },
           ctrl.signal,
           currentAttachment?.b64,
           currentAttachment?.mime,
@@ -174,7 +176,7 @@ export function ChatPanel({ result, geminiKey, aiConnected = false }: ChatPanelP
         setLoading(false);
       }
     },
-    [input, messages, loading, result.company, context, geminiKey, attachment]
+    [input, messages, loading, result.company, context, aiProvider, geminiKey, deepseekKey, attachment]
   );
 
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -189,7 +191,8 @@ export function ChatPanel({ result, geminiKey, aiConnected = false }: ChatPanelP
     }
   }, []);
 
-  const hasAi = aiConnected || !!geminiKey?.trim();
+  const selectedKey = aiProvider === "deepseek" ? deepseekKey : geminiKey;
+  const hasAi = aiConnected || !!selectedKey?.trim();
 
   return (
     <GlassCard className="mx-auto mt-6 w-full max-w-4xl overflow-hidden animate-fade-in">
@@ -202,7 +205,9 @@ export function ChatPanel({ result, geminiKey, aiConnected = false }: ChatPanelP
           <div>
             <p className="text-sm font-semibold text-ink">{result.company} hakkında sor</p>
             <p className="text-[11px] text-ink-muted">
-              {hasAi ? "AI · eğitici finansal Q&A" : "AI API key gerekli · sidebar'dan ekle"}
+              {hasAi
+                ? `${aiProvider === "deepseek" ? "DeepSeek" : "Gemini"} · eğitici finansal Q&A`
+                : "AI API key gerekli · sidebar'dan ekle"}
             </p>
           </div>
         </div>

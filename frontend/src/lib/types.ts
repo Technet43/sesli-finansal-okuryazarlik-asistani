@@ -1,4 +1,5 @@
 export type ExplanationMode = "simple" | "professional" | "technical";
+export type AiProvider = "gemini" | "deepseek";
 
 export type SystemStatus = {
   kap: {

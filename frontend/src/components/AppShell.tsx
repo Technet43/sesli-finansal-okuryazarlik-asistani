@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GitCompareArrows } from "lucide-react";
 import { explainCompany, getStatus, testGemini } from "@/lib/api";
-import type { ExplainResponse, ExplanationMode, SystemStatus } from "@/lib/types";
+import type { AiProvider, ExplainResponse, ExplanationMode, SystemStatus } from "@/lib/types";
 import { Header } from "./Header";
 import { HeroSearch } from "./HeroSearch";
 import { ResultsPanel } from "./ResultsPanel";
@@ -21,6 +21,8 @@ const DEFAULT_HISTORY = [
 const HISTORY_KEY = "kap-okuryazar-history";
 const FAVORITES_KEY = "kap-okuryazar-favorites";
 const GEMINI_KEY_STORAGE = "kap-okuryazar-gemini-key";
+const DEEPSEEK_KEY_STORAGE = "kap-okuryazar-deepseek-key";
+const AI_PROVIDER_STORAGE = "kap-okuryazar-ai-provider";
 const HISTORY_LIMIT = 8;
 const FAVORITES_LIMIT = 12;
 const STATUS_CACHE_TTL_MS = 30_000;
@@ -36,7 +38,9 @@ export function AppShell() {
   const [highContrast, setHighContrast] = useState(false);
   const [mode, setMode] = useState<ExplanationMode>("professional");
   const [ttsRate, setTtsRateState] = useState(0.92);
+  const [aiProvider, setAiProviderState] = useState<AiProvider>("gemini");
   const [geminiKey, setGeminiKeyState] = useState("");
+  const [deepseekKey, setDeepseekKeyState] = useState("");
   const [geminiTesting, setGeminiTesting] = useState(false);
   const [geminiMessage, setGeminiMessage] = useState("");
   const [status, setStatus] = useState<SystemStatus | null>(null);
@@ -52,6 +56,10 @@ export function AppShell() {
   const abortRef = useRef<AbortController | null>(null);
   const abortRefB = useRef<AbortController | null>(null);
   const statusCacheRef = useRef<{ data: SystemStatus; ts: number } | null>(null);
+  const aiOptions = useMemo(
+    () => ({ provider: aiProvider, geminiKey, deepseekKey }),
+    [aiProvider, geminiKey, deepseekKey]
+  );
 
   function setDarkMode(value: boolean) {
     setDarkModeState(value);
@@ -71,16 +79,31 @@ export function AppShell() {
     } catch { /* ignore */ }
   }
 
-  async function refreshStatus(apiKey?: string) {
+  function setDeepseekKey(value: string) {
+    setDeepseekKeyState(value);
+    try {
+      if (value) window.sessionStorage.setItem(DEEPSEEK_KEY_STORAGE, value);
+      else window.sessionStorage.removeItem(DEEPSEEK_KEY_STORAGE);
+    } catch { /* ignore */ }
+  }
+
+  function setAiProvider(value: AiProvider) {
+    setAiProviderState(value);
+    try { window.localStorage.setItem(AI_PROVIDER_STORAGE, value); } catch { /* ignore */ }
+    void refreshStatus({ provider: value, geminiKey, deepseekKey });
+  }
+
+  async function refreshStatus(options?: typeof aiOptions) {
     const now = Date.now();
-    if (!apiKey && statusCacheRef.current && now - statusCacheRef.current.ts < STATUS_CACHE_TTL_MS) {
+    const hasSessionOptions = !!(options?.geminiKey || options?.deepseekKey || options?.provider);
+    if (!hasSessionOptions && statusCacheRef.current && now - statusCacheRef.current.ts < STATUS_CACHE_TTL_MS) {
       setStatus(statusCacheRef.current.data);
       return;
     }
     try {
-      const data = await getStatus(apiKey);
+      const data = await getStatus(options);
       setStatus(data);
-      if (!apiKey) statusCacheRef.current = { data, ts: now };
+      if (!hasSessionOptions) statusCacheRef.current = { data, ts: now };
     } catch {
       setStatus(null);
     }
@@ -119,6 +142,14 @@ export function AppShell() {
       const savedKey = window.sessionStorage.getItem(GEMINI_KEY_STORAGE);
       if (savedKey) setGeminiKeyState(savedKey);
     } catch { /* ignore */ }
+    try {
+      const savedDeepseekKey = window.sessionStorage.getItem(DEEPSEEK_KEY_STORAGE);
+      if (savedDeepseekKey) setDeepseekKeyState(savedDeepseekKey);
+    } catch { /* ignore */ }
+    try {
+      const savedProvider = window.localStorage.getItem(AI_PROVIDER_STORAGE);
+      if (savedProvider === "gemini" || savedProvider === "deepseek") setAiProviderState(savedProvider);
+    } catch { /* ignore */ }
     void refreshStatus();
   }, []);
 
@@ -142,7 +173,7 @@ export function AppShell() {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [loading, company, days, summaryCount, mode, demoMode, geminiKey]
+    [loading, company, days, summaryCount, mode, demoMode, aiProvider, geminiKey, deepseekKey]
   );
 
   useEffect(() => {
@@ -152,6 +183,25 @@ export function AppShell() {
 
   const safeHistory = useMemo(() => history.slice(0, 6), [history]);
   const aiConnected = status?.gemini.status === "connected";
+  const comparisonChatResult = useMemo<ExplainResponse | null>(() => {
+    if (!compareMode || !result) return null;
+    if (!resultB) return result;
+    return {
+      ...result,
+      company: `${result.company} vs ${resultB.company}`,
+      summary: [
+        `Şirket A: ${result.company}`,
+        result.summary,
+        "",
+        `Şirket B: ${resultB.company}`,
+        resultB.summary,
+      ].join("\n"),
+      notifications: [...result.notifications, ...resultB.notifications],
+      anomalies: [...result.anomalies, ...resultB.anomalies],
+      financialNumbers: [...result.financialNumbers, ...resultB.financialNumbers],
+      disclosureCount: (result.disclosureCount ?? 0) + (resultB.disclosureCount ?? 0),
+    };
+  }, [compareMode, result, resultB]);
 
   function toggleFavorite(value: string) {
     const clean = value.trim();
@@ -197,7 +247,7 @@ export function AppShell() {
     try {
       const response = await explainCompany(
         { company: clean, days, summaryCount, mode, useDemo: demoMode },
-        geminiKey,
+        aiOptions,
         controller.signal
       );
       setRes(response);
@@ -242,9 +292,9 @@ export function AppShell() {
     setGeminiTesting(true);
     setGeminiMessage("Test ediliyor...");
     try {
-      const response = await testGemini(geminiKey);
+      const response = await testGemini(aiOptions);
       setGeminiMessage(response.message);
-      void refreshStatus(geminiKey);
+      void refreshStatus(aiOptions);
     } catch (err) {
       setGeminiMessage(err instanceof Error ? err.message : "AI bağlantı testi başarısız.");
     } finally {
@@ -284,8 +334,12 @@ export function AppShell() {
             setMode={setMode}
             ttsRate={ttsRate}
             setTtsRate={setTtsRate}
+            aiProvider={aiProvider}
+            setAiProvider={setAiProvider}
             geminiKey={geminiKey}
             setGeminiKey={setGeminiKey}
+            deepseekKey={deepseekKey}
+            setDeepseekKey={setDeepseekKey}
             onTestGemini={handleTestGemini}
             geminiTesting={geminiTesting}
             geminiMessage={geminiMessage}
@@ -356,22 +410,33 @@ export function AppShell() {
             )}
 
             {compareMode ? (
-              <ComparisonPanel
-                resultA={result}
-                resultB={resultB}
-                loadingA={loading}
-                loadingB={loadingB}
-                errorA={error}
-                errorB={errorB}
-                onRetryA={handleExplain}
-                onRetryB={() => {
-                  if (companyB.trim()) {
-                    void fetchFor(companyB, abortRefB, setResultB, setErrorB, setLoadingB, false);
-                  }
-                }}
-                ttsRate={ttsRate}
-                geminiKey={geminiKey}
-              />
+              <>
+                <ComparisonPanel
+                  resultA={result}
+                  resultB={resultB}
+                  loadingA={loading}
+                  loadingB={loadingB}
+                  errorA={error}
+                  errorB={errorB}
+                  onRetryA={handleExplain}
+                  onRetryB={() => {
+                    if (companyB.trim()) {
+                      void fetchFor(companyB, abortRefB, setResultB, setErrorB, setLoadingB, false);
+                    }
+                  }}
+                  ttsRate={ttsRate}
+                  geminiKey={geminiKey}
+                />
+                {comparisonChatResult && !loading && !loadingB && (
+                  <ChatPanel
+                    result={comparisonChatResult}
+                    aiProvider={aiProvider}
+                    geminiKey={geminiKey}
+                    deepseekKey={deepseekKey}
+                    aiConnected={aiConnected}
+                  />
+                )}
+              </>
             ) : (
               <>
                 <ResultsPanel
@@ -385,7 +450,13 @@ export function AppShell() {
                   onFavoriteToggle={() => result && toggleFavorite(result.company)}
                 />
                 {result && !loading && (
-                  <ChatPanel result={result} geminiKey={geminiKey} aiConnected={aiConnected} />
+                  <ChatPanel
+                    result={result}
+                    aiProvider={aiProvider}
+                    geminiKey={geminiKey}
+                    deepseekKey={deepseekKey}
+                    aiConnected={aiConnected}
+                  />
                 )}
               </>
             )}

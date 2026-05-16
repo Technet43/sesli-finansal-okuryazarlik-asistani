@@ -70,6 +70,20 @@ _RL_LIMIT = 10       # max requests
 _RL_WINDOW = 60.0    # per N seconds
 
 
+def _selected_provider(value: str | None) -> str:
+    return active_provider(value)
+
+
+def _selected_api_key(
+    provider: str,
+    gemini_key: str | None = None,
+    deepseek_key: str | None = None,
+) -> str | None:
+    if provider == "deepseek":
+        return deepseek_key
+    return gemini_key
+
+
 def _rate_limit(request: Request, limit: int = _RL_LIMIT, window: float = _RL_WINDOW) -> None:
     ip = request.client.host if request.client else "unknown"
     now = time.monotonic()
@@ -120,10 +134,14 @@ def version() -> dict:
 @app.get("/api/status", response_model=StatusResponse)
 def status(
     x_gemini_api_key: str | None = Header(default=None, alias="X-Gemini-Api-Key"),
+    x_deepseek_api_key: str | None = Header(default=None, alias="X-DeepSeek-Api-Key"),
+    x_ai_provider: str | None = Header(default=None, alias="X-AI-Provider"),
 ) -> StatusResponse:
+    provider = _selected_provider(x_ai_provider)
+    api_key = _selected_api_key(provider, x_gemini_api_key, x_deepseek_api_key)
     kap_ok = ping_kap()
-    ai_connected = has_provider_key(api_key=x_gemini_api_key)
-    label = provider_label()
+    ai_connected = has_provider_key(api_key=api_key, provider=provider)
+    label = provider_label(provider)
     return StatusResponse(
         kap=StatusItem(
             status="live" if kap_ok else "offline",
@@ -140,8 +158,12 @@ def status(
 @app.post("/api/test-gemini", response_model=GeminiTestResponse)
 def test_gemini(
     x_gemini_api_key: str | None = Header(default=None, alias="X-Gemini-Api-Key"),
+    x_deepseek_api_key: str | None = Header(default=None, alias="X-DeepSeek-Api-Key"),
+    x_ai_provider: str | None = Header(default=None, alias="X-AI-Provider"),
 ) -> GeminiTestResponse:
-    ok, message = test_connection(api_key=x_gemini_api_key)
+    provider = _selected_provider(x_ai_provider)
+    api_key = _selected_api_key(provider, x_gemini_api_key, x_deepseek_api_key)
+    ok, message = test_connection(api_key=api_key, provider=provider)
     return GeminiTestResponse(ok=ok, message=message)
 
 
@@ -173,8 +195,12 @@ def explain(
     request: ExplainRequest,
     http_request: Request,
     x_gemini_api_key: str | None = Header(default=None, alias="X-Gemini-Api-Key"),
+    x_deepseek_api_key: str | None = Header(default=None, alias="X-DeepSeek-Api-Key"),
+    x_ai_provider: str | None = Header(default=None, alias="X-AI-Provider"),
 ) -> ExplainResponse:
     _rate_limit(http_request)
+    provider = _selected_provider(x_ai_provider)
+    api_key = _selected_api_key(provider, x_gemini_api_key, x_deepseek_api_key)
     req_id = str(uuid.uuid4())[:8]
     t0 = time.monotonic()
     logger.info("[%s] explain(%s) started", req_id, request.company)
@@ -198,7 +224,7 @@ def explain(
 
         t_gemini = time.monotonic()
         result = explain_disclosures(
-            company, disclosures, request.mode, api_key=x_gemini_api_key
+            company, disclosures, request.mode, api_key=api_key, provider=provider
         )
         logger.info("[%s] Gemini summarize: %.2fs", req_id, time.monotonic() - t_gemini)
         anomalies_raw = detect_anomalies(disclosures)
@@ -339,13 +365,17 @@ def chat(
     request: ChatRequest,
     http_request: Request,
     x_gemini_api_key: str | None = Header(default=None, alias="X-Gemini-Api-Key"),
+    x_deepseek_api_key: str | None = Header(default=None, alias="X-DeepSeek-Api-Key"),
+    x_ai_provider: str | None = Header(default=None, alias="X-AI-Provider"),
 ) -> ChatResponse:
     _rate_limit(http_request, limit=30, window=60.0)
     from app.services.safety_service import clean_advice_language
 
+    provider = _selected_provider(x_ai_provider)
+    api_key = _selected_api_key(provider, x_gemini_api_key, x_deepseek_api_key)
     contents = _build_chat_contents(request)
     try:
-        reply = clean_advice_language(generate_chat(contents, api_key=x_gemini_api_key))
+        reply = clean_advice_language(generate_chat(contents, api_key=api_key, provider=provider))
         return ChatResponse(reply=reply or "Yanıt oluşturulamadı, lütfen tekrar dene.")
     except AIProviderError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
@@ -359,17 +389,21 @@ def chat_stream(
     request: ChatRequest,
     http_request: Request,
     x_gemini_api_key: str | None = Header(default=None, alias="X-Gemini-Api-Key"),
+    x_deepseek_api_key: str | None = Header(default=None, alias="X-DeepSeek-Api-Key"),
+    x_ai_provider: str | None = Header(default=None, alias="X-AI-Provider"),
 ):
     _rate_limit(http_request, limit=30, window=60.0)
     import json as _json
     from fastapi.responses import StreamingResponse
     from app.services.safety_service import clean_advice_language
 
+    provider = _selected_provider(x_ai_provider)
+    api_key = _selected_api_key(provider, x_gemini_api_key, x_deepseek_api_key)
     contents = _build_chat_contents(request)
 
     def generate():
         try:
-            for text in stream_ai_chat(contents, api_key=x_gemini_api_key):
+            for text in stream_ai_chat(contents, api_key=api_key, provider=provider):
                 if text:
                     text = clean_advice_language(text)
                     yield f"data: {_json.dumps({'text': text})}\n\n"

@@ -82,6 +82,7 @@ def explain_disclosures(
     disclosures: list[dict],
     mode: str,
     api_key: str | None = None,
+    provider: str | None = None,
 ) -> dict:
     tone = MODE_LABELS.get(mode, MODE_LABELS["simple"])
     disclosure_count = len(disclosures)
@@ -123,7 +124,7 @@ Hisse kodu: {company.ticker}
 KAP bildirimleri:
 {compact_disclosures(disclosures)}"""
     try:
-        text = generate_text(prompt, api_key=api_key, json_mode=True)
+        text = generate_text(prompt, api_key=api_key, json_mode=True, provider=provider)
         data = json_from_text(text)
         return normalize_summary(data, company, disclosures)
     except AIProviderError:

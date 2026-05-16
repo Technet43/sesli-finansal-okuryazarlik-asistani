@@ -1,4 +1,5 @@
 import type {
+  AiProvider,
   ChatMessage,
   ChatResponse,
   ExplainRequest,
@@ -13,9 +14,20 @@ const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").rep
 );
 const DEFAULT_TIMEOUT_MS = 60_000;
 
-function authHeaders(apiKey?: string): Record<string, string> {
-  const key = apiKey?.trim();
-  return key ? { "X-Gemini-Api-Key": key } : {};
+export type AiRequestOptions = {
+  provider?: AiProvider;
+  geminiKey?: string;
+  deepseekKey?: string;
+};
+
+function aiHeaders(options?: AiRequestOptions): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (options?.provider) headers["X-AI-Provider"] = options.provider;
+  const geminiKey = options?.geminiKey?.trim();
+  const deepseekKey = options?.deepseekKey?.trim();
+  if (geminiKey) headers["X-Gemini-Api-Key"] = geminiKey;
+  if (deepseekKey) headers["X-DeepSeek-Api-Key"] = deepseekKey;
+  return headers;
 }
 
 async function request<T>(
@@ -65,33 +77,33 @@ async function request<T>(
   }
 }
 
-export function getStatus(apiKey?: string): Promise<SystemStatus> {
+export function getStatus(options?: AiRequestOptions): Promise<SystemStatus> {
   return request<SystemStatus>(
     "/api/status",
-    { method: "GET", headers: authHeaders(apiKey) },
+    { method: "GET", headers: aiHeaders(options) },
     8_000
   );
 }
 
 export function explainCompany(
   payload: ExplainRequest,
-  apiKey?: string,
+  options?: AiRequestOptions,
   signal?: AbortSignal
 ): Promise<ExplainResponse> {
   return request<ExplainResponse>("/api/explain", {
     method: "POST",
-    headers: authHeaders(apiKey),
+    headers: aiHeaders(options),
     body: JSON.stringify(payload),
     externalSignal: signal,
   });
 }
 
-export function testGemini(apiKey?: string): Promise<GeminiTestResponse> {
+export function testGemini(options?: AiRequestOptions): Promise<GeminiTestResponse> {
   return request<GeminiTestResponse>(
     "/api/test-gemini",
     {
       method: "POST",
-      headers: authHeaders(apiKey),
+      headers: aiHeaders(options),
       body: JSON.stringify({}),
     },
     20_000
@@ -103,7 +115,7 @@ export function sendChat(
   context: string,
   history: ChatMessage[],
   message: string,
-  apiKey?: string,
+  options?: AiRequestOptions,
   signal?: AbortSignal,
   fileB64?: string,
   fileMime?: string,
@@ -112,7 +124,7 @@ export function sendChat(
     "/api/chat",
     {
       method: "POST",
-      headers: authHeaders(apiKey),
+      headers: aiHeaders(options),
       body: JSON.stringify({ company, context, history, message, file_b64: fileB64 ?? null, file_mime: fileMime ?? null }),
       externalSignal: signal,
     },
@@ -125,7 +137,7 @@ export async function* streamChat(
   context: string,
   history: ChatMessage[],
   message: string,
-  apiKey?: string,
+  options?: AiRequestOptions,
   signal?: AbortSignal,
   fileB64?: string,
   fileMime?: string,
@@ -136,7 +148,7 @@ export async function* streamChat(
     headers: {
       "Content-Type": "application/json",
       Accept: "text/event-stream",
-      ...authHeaders(apiKey),
+      ...aiHeaders(options),
     },
     body: JSON.stringify({ company, context, history, message, file_b64: fileB64 ?? null, file_mime: fileMime ?? null }),
   });
@@ -177,7 +189,7 @@ export async function transcribeAudio(audioBlob: Blob, apiKey?: string): Promise
     "/api/transcribe/audio",
     {
       method: "POST",
-      headers: authHeaders(apiKey),
+      headers: aiHeaders({ geminiKey: apiKey }),
       body: JSON.stringify({ audio_b64, mime_type }),
     },
     25_000
@@ -190,7 +202,7 @@ export async function fetchTTS(text: string, apiKey?: string, voice = "Aoede"): 
     "/api/tts",
     {
       method: "POST",
-      headers: authHeaders(apiKey),
+      headers: aiHeaders({ geminiKey: apiKey }),
       body: JSON.stringify({ text, voice }),
     },
     30_000

@@ -28,48 +28,57 @@ class AIProviderError(Exception):
         self.status_code = status_code
 
 
-def active_provider() -> str:
-    return AI_PROVIDER if AI_PROVIDER in {"gemini", "deepseek"} else "gemini"
+ProviderName = str
 
 
-def provider_label() -> str:
-    return "DeepSeek" if active_provider() == "deepseek" else "Gemini"
+def active_provider(provider: ProviderName | None = None) -> str:
+    candidate = (provider or AI_PROVIDER).strip().lower()
+    return candidate if candidate in {"gemini", "deepseek"} else "gemini"
 
 
-def has_provider_key(api_key: str | None = None) -> bool:
-    if active_provider() == "deepseek":
+def provider_label(provider: ProviderName | None = None) -> str:
+    return "DeepSeek" if active_provider(provider) == "deepseek" else "Gemini"
+
+
+def has_provider_key(api_key: str | None = None, provider: ProviderName | None = None) -> bool:
+    if active_provider(provider) == "deepseek":
         return bool((api_key or DEEPSEEK_API_KEY).strip())
     return get_client(api_key=api_key) is not None
 
 
-def generate_text(prompt: str, api_key: str | None = None, json_mode: bool = False) -> str:
-    if active_provider() == "deepseek":
+def generate_text(
+    prompt: str,
+    api_key: str | None = None,
+    json_mode: bool = False,
+    provider: ProviderName | None = None,
+) -> str:
+    if active_provider(provider) == "deepseek":
         messages = [{"role": "user", "content": prompt}]
         return _deepseek_chat(messages, api_key=api_key, json_mode=json_mode)
     return _gemini_text(prompt, api_key=api_key)
 
 
-def generate_chat(contents: list[dict], api_key: str | None = None) -> str:
-    if active_provider() == "deepseek":
+def generate_chat(contents: list[dict], api_key: str | None = None, provider: ProviderName | None = None) -> str:
+    if active_provider(provider) == "deepseek":
         return _deepseek_chat(_contents_to_openai_messages(contents), api_key=api_key)
     return _gemini_contents(contents, api_key=api_key)
 
 
-def stream_chat(contents: list[dict], api_key: str | None = None) -> Iterator[str]:
-    if active_provider() == "deepseek":
+def stream_chat(contents: list[dict], api_key: str | None = None, provider: ProviderName | None = None) -> Iterator[str]:
+    if active_provider(provider) == "deepseek":
         yield from _deepseek_stream(_contents_to_openai_messages(contents), api_key=api_key)
         return
     yield from _gemini_stream(contents, api_key=api_key)
 
 
-def test_connection(api_key: str | None = None) -> tuple[bool, str]:
+def test_connection(api_key: str | None = None, provider: ProviderName | None = None) -> tuple[bool, str]:
     try:
-        text = generate_text("Sadece 'hazır' yaz.", api_key=api_key)
-        return True, f"{provider_label()} bağlantısı başarılı: {text[:80] or 'yanıt alındı'}"
+        text = generate_text("Sadece 'hazır' yaz.", api_key=api_key, provider=provider)
+        return True, f"{provider_label(provider)} bağlantısı başarılı: {text[:80] or 'yanıt alındı'}"
     except AIProviderError as exc:
         return False, exc.message
     except Exception as exc:
-        return False, f"{provider_label()} bağlantı hatası: {str(exc)[:220]}"
+        return False, f"{provider_label(provider)} bağlantı hatası: {str(exc)[:220]}"
 
 
 def _gemini_text(prompt: str, api_key: str | None = None) -> str:
@@ -215,4 +224,4 @@ def _map_provider_exception(exc: Exception) -> AIProviderError:
         return AIProviderError(API_LIMIT_MESSAGE, status_code=429)
     if "api_key_invalid" in lower or "permission_denied" in lower or "invalid api key" in lower:
         return AIProviderError(API_KEY_MESSAGE, status_code=503)
-    return AIProviderError(f"{provider_label()} bağlantı hatası: {message[:220]}", status_code=502)
+    return AIProviderError(f"AI bağlantı hatası: {message[:220]}", status_code=502)

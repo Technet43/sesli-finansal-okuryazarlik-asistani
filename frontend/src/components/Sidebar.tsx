@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { Eye, EyeOff, Loader2, Lock, Moon, ShieldCheck, Sparkles, Sun, Volume2 } from "lucide-react";
-import type { ExplanationMode, SystemStatus } from "@/lib/types";
+import type { AiProvider, ExplanationMode, SystemStatus } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -30,8 +30,12 @@ type SidebarProps = {
   setMode: (value: ExplanationMode) => void;
   ttsRate: number;
   setTtsRate: (value: number) => void;
+  aiProvider: AiProvider;
+  setAiProvider: (value: AiProvider) => void;
   geminiKey: string;
   setGeminiKey: (value: string) => void;
+  deepseekKey: string;
+  setDeepseekKey: (value: string) => void;
   onTestGemini: () => void;
   geminiTesting: boolean;
   geminiMessage: string;
@@ -126,10 +130,29 @@ export function Sidebar(props: SidebarProps) {
       </div>
 
       <div className="space-y-3">
+        <div className="space-y-2">
+          <span id="provider-label" className="text-sm font-semibold text-ink">
+            AI sağlayıcı
+          </span>
+          <Select
+            value={props.aiProvider}
+            onValueChange={(value) => props.setAiProvider(value as AiProvider)}
+          >
+            <SelectTrigger aria-labelledby="provider-label">
+              <SelectValue placeholder="Sağlayıcı seç" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="gemini">Gemini</SelectItem>
+              <SelectItem value="deepseek">DeepSeek</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
         <label className="block space-y-1.5" htmlFor="gemini-api-key">
           <span className="text-sm font-semibold text-ink">AI API</span>
           <span className="block text-xs leading-5 text-ink-muted">
-            Buraya yapıştırırsan bu oturumda kullanılır. Boş bırakırsan sunucu
+            İki anahtarı da girebilirsin. Seçtiğin sağlayıcı analiz ve chat için kullanılır.
+            Boş bırakırsan sunucu
             <code className="mx-1 rounded bg-white/70 px-1 py-0.5 text-[11px] text-ink">.env</code>
             dosyasındaki anahtar kullanılır.
           </span>
@@ -141,7 +164,7 @@ export function Sidebar(props: SidebarProps) {
             type={showKey ? "text" : "password"}
             value={props.geminiKey}
             onChange={(event) => props.setGeminiKey(event.target.value)}
-            placeholder="API key..."
+            placeholder="Gemini API key..."
             autoComplete="off"
             spellCheck={false}
             className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-slate-400"
@@ -150,6 +173,31 @@ export function Sidebar(props: SidebarProps) {
             type="button"
             onClick={() => setShowKey((value) => !value)}
             aria-label={showKey ? "Anahtarı gizle" : "Anahtarı göster"}
+            className="grid h-7 w-7 place-items-center rounded-md text-ink-muted transition hover:bg-white/70"
+          >
+            {showKey ? (
+              <EyeOff className="h-4 w-4" aria-hidden />
+            ) : (
+              <Eye className="h-4 w-4" aria-hidden />
+            )}
+          </button>
+        </div>
+        <div className="flex h-11 items-center gap-2 rounded-xl border border-white/70 bg-white/70 px-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)] focus-within:ring-2 focus-within:ring-iris-indigo/60">
+          <Lock className="h-4 w-4 shrink-0 text-ink-muted" aria-hidden />
+          <input
+            id="deepseek-api-key"
+            type={showKey ? "text" : "password"}
+            value={props.deepseekKey}
+            onChange={(event) => props.setDeepseekKey(event.target.value)}
+            placeholder="DeepSeek API key..."
+            autoComplete="off"
+            spellCheck={false}
+            className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-slate-400"
+          />
+          <button
+            type="button"
+            onClick={() => setShowKey((value) => !value)}
+            aria-label={showKey ? "Anahtarları gizle" : "Anahtarları göster"}
             className="grid h-7 w-7 place-items-center rounded-md text-ink-muted transition hover:bg-white/70"
           >
             {showKey ? (
