@@ -22,3 +22,4 @@ ALLOWED_ORIGINS = [
     for origin in os.getenv("ALLOWED_ORIGINS", _DEFAULT_ORIGINS).split(",")
     if origin.strip()
 ]
+ALLOWED_ORIGIN_REGEX = os.getenv("ALLOWED_ORIGIN_REGEX", "").strip() or None

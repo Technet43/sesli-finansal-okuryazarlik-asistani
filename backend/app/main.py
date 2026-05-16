@@ -19,7 +19,7 @@ from app.core.bootstrap import ensure_repo_root_on_path
 
 ensure_repo_root_on_path()
 
-from app.core.config import ALLOWED_ORIGINS, DISCLAIMER, GEMINI_MODEL, SERVICE_NAME  # noqa: E402
+from app.core.config import ALLOWED_ORIGIN_REGEX, ALLOWED_ORIGINS, DISCLAIMER, GEMINI_MODEL, SERVICE_NAME  # noqa: E402
 from app.models.schemas import (  # noqa: E402
     AnomalyFlag,
     ChatRequest,
@@ -107,6 +107,7 @@ app.add_middleware(GZipMiddleware, minimum_size=512)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=ALLOWED_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

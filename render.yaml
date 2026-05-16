@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: kap-okuryazar-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: AI_PROVIDER
+        value: gemini
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: DEEPSEEK_BASE_URL
+        value: https://api.deepseek.com
+      - key: DEEPSEEK_MODEL
+        value: deepseek-chat
+      - key: ALLOWED_ORIGINS
+        value: http://localhost:3000,http://127.0.0.1:3000
+      - key: ALLOWED_ORIGIN_REGEX
+        value: 'https://.*\.vercel\.app'

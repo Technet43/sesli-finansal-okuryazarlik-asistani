@@ -293,6 +293,10 @@ ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 
 API anahtarı **frontend'e gömülmez** ve sunucu `.env`'inden otomatik alınmaz; kullanıcı sidebar'dan tek oturumluk olarak yapıştırır (`X-Gemini-Api-Key` veya `X-DeepSeek-Api-Key` header'ı).
 
+### Full-stack Deploy
+
+Modern Next.js + FastAPI sürümünü Vercel + Render ile yayınlamak için [DEPLOYMENT.md](DEPLOYMENT.md) dosyasını takip et.
+
 ---
 
 ## 📡 API Referansı
