@@ -19,8 +19,7 @@ from app.core.bootstrap import ensure_repo_root_on_path
 
 ensure_repo_root_on_path()
 
-from app.core.config import ALLOWED_ORIGINS, DISCLAIMER, SERVICE_NAME  # noqa: E402
-from kap_okuryazar.config import DEFAULT_MODEL  # noqa: E402
+from app.core.config import ALLOWED_ORIGINS, DISCLAIMER, GEMINI_MODEL, SERVICE_NAME  # noqa: E402
 from app.models.schemas import (  # noqa: E402
     AnomalyFlag,
     ChatRequest,
@@ -36,7 +35,16 @@ from app.models.schemas import (  # noqa: E402
     TTSRequest,
     TTSResponse,
 )
-from app.services.gemini_service import get_client, test_connection  # noqa: E402
+from app.services.ai_provider_service import (  # noqa: E402
+    AIProviderError,
+    active_provider,
+    generate_chat,
+    has_provider_key,
+    provider_label,
+    stream_chat as stream_ai_chat,
+    test_connection,
+)
+from app.services.gemini_service import get_client  # noqa: E402
 from app.services.kap_service import (  # noqa: E402
     demo_company,
     demo_disclosures,
@@ -79,7 +87,7 @@ def _rate_limit(request: Request, limit: int = _RL_LIMIT, window: float = _RL_WI
 @app.on_event("startup")
 def on_startup() -> None:
     import sys
-    logger.info("KAP Okuryazar starting — Python %s, model=%s", sys.version.split()[0], DEFAULT_MODEL)
+    logger.info("KAP Okuryazar starting — Python %s, provider=%s", sys.version.split()[0], active_provider())
 
 app.add_middleware(GZipMiddleware, minimum_size=512)
 app.add_middleware(
@@ -106,7 +114,7 @@ def version() -> dict:
         ).strip()
     except Exception:
         git_hash = "unknown"
-    return {"version": "0.1.0", "git": git_hash, "model": DEFAULT_MODEL}
+    return {"version": "0.1.0", "git": git_hash, "provider": active_provider()}
 
 
 @app.get("/api/status", response_model=StatusResponse)
@@ -114,15 +122,16 @@ def status(
     x_gemini_api_key: str | None = Header(default=None, alias="X-Gemini-Api-Key"),
 ) -> StatusResponse:
     kap_ok = ping_kap()
-    gemini_connected = get_client(api_key=x_gemini_api_key) is not None
+    ai_connected = has_provider_key(api_key=x_gemini_api_key)
+    label = provider_label()
     return StatusResponse(
         kap=StatusItem(
             status="live" if kap_ok else "offline",
             label="Canlı veri kaynağı" if kap_ok else "KAP'a ulaşılamıyor",
         ),
         gemini=StatusItem(
-            status="connected" if gemini_connected else "fallback",
-            label="Bağlı" if gemini_connected else "Fallback modda",
+            status="connected" if ai_connected else "fallback",
+            label=f"{label} bağlı" if ai_connected else f"{label} anahtarı gerekli",
         ),
         lastCheck="Az önce",
     )
@@ -199,7 +208,14 @@ def explain(
         ]
         financial_numbers_dict: dict[str, str] = {}
         for disclosure in disclosures:
-            text = disclosure.get("page_text") or disclosure.get("summary") or ""
+            text = " ".join(
+                str(part or "")
+                for part in [
+                    disclosure.get("report_text"),
+                    disclosure.get("page_text"),
+                    disclosure.get("summary"),
+                ]
+            )
             numbers = extract_financial_numbers(text)
             for label, value in numbers:
                 if label not in financial_numbers_dict:
@@ -225,6 +241,9 @@ def explain(
         return response
     except HTTPException:
         raise
+    except AIProviderError as exc:
+        logger.warning("[%s] explain(%s) provider error: %s", req_id, request.company, exc.message)
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
     except Exception as exc:
         logger.exception("[%s] explain(%s) failed after %.2fs", req_id, request.company, time.monotonic() - t0)
         raise HTTPException(status_code=502, detail=f"Analiz hazırlanamadı: {str(exc)[:220]}") from exc
@@ -232,19 +251,63 @@ def explain(
 
 def _build_chat_contents(request: ChatRequest) -> list[dict]:
     system_prompt = f"""Sen KAP Okuryazar finansal okuryazarlık asistanısın.
-Türk bireysel yatırımcılara ve meraklılara KAP bildirimlerini anlaşılır biçimde öğretiyorsun.
+KAP bildirimlerini, finansal raporları ve şirket açıklamalarını yatırım tavsiyesi vermeden sade Türkçe ile anlatırsın.
 
 Görevin:
 - Bildirimlerdeki haberleri bağlamıyla açıkla: ne anlama geliyor, neden önemli, sektörde ne ifade eder.
 - Finansal kavramları (PwC denetimi, sınırlı denetim, bağımsız denetim, temettü, kar payı, sermaye artırımı vb.) Türkçe'de kısaca tanımla.
-- Bildirimlerde doğrudan yanıt bulamıyorsan genel finansal bilginle eğitici bir açıklama yap — ama bunu "Bu bildirimlerde bilgi yok, genel olarak..." diye belirt.
+- Bildirimlerde doğrudan yanıt bulamıyorsan genel finansal bilginle eğitici bir açıklama yap; ama bunu "Bu bildirimlerde bilgi yok, genel olarak..." diye belirt.
 - Olası etkileri (olumlu/olumsuz işaretler) eğitici dille açıkla: "Bu genellikle ... anlamına gelir."
-- Kesinlikle yatırım tavsiyesi verme; "al", "sat", "kesin yükselir/düşer" deme. Bunun yerine "yatırımcılar genellikle bunu ... olarak yorumlar" gibi eğitici çerçeve kullan.
-- Kısa ve öz ol (max 5-6 cümle). Emoji kullanma.
+- KAP bağlamını yalnızca kullanıcı finans, KAP, şirket, bildirim, rapor veya finansal oranlarla ilgili bir soru sorarsa kullan.
+- Kullanıcı sadece selam verir, teşekkür eder veya gündelik küçük konuşma yaparsa kısa karşılık ver; KAP raporunu analiz etme.
+- Kullanıcı rapor detayı sorarsa ama rapor eki/metni bağlamda yoksa şunu açıkça söyle: "Bu raporun ek içeriği sistem tarafından okunamadığı için yalnızca KAP bildirimi üzerinden yorum yapabiliyorum."
+
+Kesin kurallar:
+- Yatırım tavsiyesi verme.
+- "Al", "sat", "tut", "kesin yükselir", "kesin düşer", "bu hisse alınır" gibi yönlendirici ifadeler kullanma.
+- İçerikte olmayan finansal veri uydurma.
+- Sayısal veri yoksa hesaplama yapma; "Bu bildirimin içinde bu veri yer almıyor." de.
 - Türkçe cevap ver.
+- HTML etiketi kullanma.
+- Emoji veya süsleme kullanma.
+- Cevabı tek parça uzun paragraf olarak yazma.
+- Cevap genelde 120-220 Türkçe kelime arasında olsun.
+- Her bölüm en fazla 2 kısa cümle içersin.
+- Bullet listeler en fazla 3 madde içersin.
+- Bullet maddeleri arasında boş satır bırakma.
+
+Okunabilirlik kuralları:
+- Clean Markdown kullan.
+- Başlıkları `##` ile yaz.
+- Paragrafları kısa tut; her paragraf en fazla 2 kısa cümle olsun.
+- Maddeleri kısa bullet point olarak ver.
+- Kalın yazıyı sadece önemli kavramlarda kullan.
+- Formül, oran veya hesap gerekiyorsa LaTeX kullan.
+- Formülleri ayrı satırda göster.
+- LaTeX kullandığında sembolleri kısa maddelerle açıkla.
+
+Cevap formatı:
+## Kısa Cevap
+
+Kullanıcının sorusuna doğrudan en fazla 2 kısa cümleyle cevap ver.
+
+## Açıklama
+
+Konuyu sade şekilde, en fazla 2 kısa cümleyle açıkla.
+
+## Dikkat Edilecek Noktalar
+
+Varsa riskleri, eksik verileri veya belirsizlikleri en fazla 3 kısa maddeyle belirt.
+
+## Sonuç
+
+Yatırım tavsiyesi vermeden kısa sonuç yaz.
+
+Küçük konuşma istisnası:
+Kullanıcının son mesajı sadece "hey", "merhaba", "selam", "teşekkürler", "sağ ol" gibi kısa bir gündelik mesajsa yukarıdaki formatı kullanma. Sadece 1-2 kısa cümleyle cevap ver ve nasıl yardımcı olabileceğini sor.
 
 Şirket: {request.company}
-{'KAP bildirim özeti (birincil kaynak):' + chr(10) + request.context[:8000] if request.context else '(Bildirim özeti yok — genel finansal bilginle cevap ver.)'}"""
+{'KAP bildirim özeti (birincil kaynak):' + chr(10) + request.context[:8000] if request.context else '(Bildirim özeti yok; genel finansal bilginle cevap ver.)'}"""
 
     contents: list[dict] = [
         {"role": "user", "parts": [{"text": system_prompt}]},
@@ -280,15 +343,12 @@ def chat(
     _rate_limit(http_request, limit=30, window=60.0)
     from app.services.safety_service import clean_advice_language
 
-    client = get_client(api_key=x_gemini_api_key)
-    if client is None:
-        raise HTTPException(status_code=503, detail="Sohbet için Gemini API key gerekli. Sidebar'a yapıştır.")
-
     contents = _build_chat_contents(request)
     try:
-        response = client.models.generate_content(model=DEFAULT_MODEL, contents=contents)
-        reply = clean_advice_language((response.text or "").strip())
+        reply = clean_advice_language(generate_chat(contents, api_key=x_gemini_api_key))
         return ChatResponse(reply=reply or "Yanıt oluşturulamadı, lütfen tekrar dene.")
+    except AIProviderError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
     except Exception as exc:
         logger.exception("Chat error for %s", request.company)
         raise HTTPException(status_code=502, detail=f"Sohbet hatası: {str(exc)[:200]}") from exc
@@ -305,20 +365,16 @@ def chat_stream(
     from fastapi.responses import StreamingResponse
     from app.services.safety_service import clean_advice_language
 
-    client = get_client(api_key=x_gemini_api_key)
-    if client is None:
-        raise HTTPException(status_code=503, detail="Sohbet için Gemini API key gerekli.")
-
     contents = _build_chat_contents(request)
 
     def generate():
         try:
-            stream = client.models.generate_content_stream(model=DEFAULT_MODEL, contents=contents)
-            for chunk in stream:
-                text = chunk.text or ""
+            for text in stream_ai_chat(contents, api_key=x_gemini_api_key):
                 if text:
                     text = clean_advice_language(text)
                     yield f"data: {_json.dumps({'text': text})}\n\n"
+        except AIProviderError as exc:
+            yield f"data: {_json.dumps({'error': exc.message})}\n\n"
         except Exception as exc:
             yield f"data: {_json.dumps({'error': str(exc)[:200]})}\n\n"
         yield "data: [DONE]\n\n"
@@ -366,7 +422,7 @@ async def transcribe_audio(
         audio_bytes = b64_mod.b64decode(audio_b64)
         from google.genai import types as gtypes  # type: ignore
         response = client.models.generate_content(
-            model=DEFAULT_MODEL,
+            model=GEMINI_MODEL,
             contents=[
                 gtypes.Part.from_bytes(data=audio_bytes, mime_type=mime_type),
                 "Bu ses kaydındaki Türkçe konuşmayı kelimesi kelimesine yaz. SADECE yazıyı döndür, başka hiçbir şey ekleme.",

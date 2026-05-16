@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from kap_okuryazar.config import DEFAULT_MODEL
 from kap_okuryazar.models import CompanyMatch
 
-from app.services.gemini_service import get_client, json_from_text
+from app.services.ai_provider_service import AIProviderError, generate_text
+from app.services.gemini_service import json_from_text
 from app.services.safety_service import clean_advice_language
 
 
@@ -15,6 +15,7 @@ MODE_LABELS = {
 
 
 _MAX_TEXT_PER_DISCLOSURE = 1200
+_MAX_REPORT_TEXT_PER_DISCLOSURE = 6000
 _MAX_TOTAL_PROMPT_CHARS = 18_000
 
 
@@ -23,6 +24,11 @@ def compact_disclosures(disclosures: list[dict]) -> str:
     total = 0
     for item in disclosures:
         page_text = str(item.get("page_text") or "")[:_MAX_TEXT_PER_DISCLOSURE]
+        report_text = str(item.get("report_text") or "")[:_MAX_REPORT_TEXT_PER_DISCLOSURE]
+        if not report_text and item.get("has_attachment"):
+            report_text = (
+                "Bu raporun ek içeriği sistem tarafından okunamadığı için yalnızca KAP bildirimi üzerinden yorum yapabiliyorum."
+            )
         chunk = "\n".join(
             [
                 f"Bildirim no: {item.get('index', '')}",
@@ -31,6 +37,7 @@ def compact_disclosures(disclosures: list[dict]) -> str:
                 f"Konu: {item.get('subject', '')}",
                 f"Kısa özet: {item.get('summary', '')}",
                 f"Metin: {page_text}",
+                f"Rapor eki içeriği: {report_text}",
                 f"Link: {item.get('url', '')}",
             ]
         )
@@ -53,6 +60,9 @@ def fallback_summary(company: CompanyMatch, disclosures: list[dict]) -> dict:
                 "plainText": clean_advice_language(plain),
                 "url": item.get("url"),
                 "category": item.get("category"),
+                "reportText": item.get("report_text") or "",
+                "reportTextSource": item.get("report_text_source") or "",
+                "reportTextError": item.get("report_text_error") or "",
             }
         )
 
@@ -72,30 +82,34 @@ def explain_disclosures(
     mode: str,
     api_key: str | None = None,
 ) -> dict:
-    client = get_client(api_key=api_key)
-    if client is None:
-        return fallback_summary(company, disclosures)
-
     tone = MODE_LABELS.get(mode, MODE_LABELS["simple"])
     disclosure_count = len(disclosures)
     prompt = f"""Sen Türkiye'de finansal okuryazarlığı artıran KAP Okuryazar asistanısın.
-KAP bildirimlerini sade Türkçe ile açıkla.
+KAP bildirimlerini, finansal raporları ve şirket açıklamalarını yatırım tavsiyesi vermeden sade Türkçe ile açıkla.
 
 Kesin kurallar:
 1. Yatırım tavsiyesi verme. "Al", "sat", "tut", "kesin yükselir", "kesin düşer" gibi yönlendirici ifade kullanma.
-2. Bilmediğin bir sonucu uydurma; bilgi yoksa bunu belirt.
+2. İçerikte olmayan finansal veri uydurma; bilgi yoksa bunu açıkça belirt.
 3. Dil seviyesi: {tone}.
 4. Her bildirim için notifications dizisine tam olarak bir giriş ekle ({disclosure_count} bildirim var).
 5. Sadece geçerli JSON döndür. Başına veya sonuna hiçbir açıklama, markdown veya kod bloğu ekleme.
+6. HTML etiketi kullanma.
+7. Sayısal veri yoksa hesaplama yapma.
+8. Formül, oran veya hesap gerekiyorsa LaTeX kullan; formülü ayrı satırda yaz.
+9. Uzun paragraf yazma; kısa cümleler ve kısa bullet point mantığıyla yaz.
+10. Bildirim sadece "finansal rapor yayımlandı" türündeyse bunun tek başına iyi veya kötü haber olmadığını belirt.
+11. Summary genelde 120-220 Türkçe kelime arasında olsun.
+12. Her Markdown bölümü en fazla 2 kısa cümle içersin.
+13. Bullet listeler en fazla 3 madde içersin ve maddeler arasında boş satır bırakma.
 
 Yanıt formatı (bu şemayı TAM olarak uygula):
 {{
-  "summary": "Tüm bildirimlerin {disclosure_count}-5 cümlelik genel sade özeti",
+  "summary": "Tüm bildirimlerin 120-220 kelimelik kısa Markdown özeti. Temiz ## başlıkları, en fazla 2 kısa cümlelik bölümler ve gerekiyorsa en fazla 3 bullet kullan.",
   "notifications": [
     {{
       "date": "YYYY-MM-DD",
       "title": "kısa bildirim başlığı",
-      "plainText": "bu bildirimin sade açıklaması, 1-3 cümle",
+      "plainText": "bu bildirimin sade açıklaması. Uzun paragraf yazma; en fazla 2 kısa cümle veya en fazla 3 kısa bullet kullan.",
       "url": "KAP bildirimi tam URL",
       "category": "bildirim kategorisi"
     }}
@@ -108,9 +122,11 @@ Hisse kodu: {company.ticker}
 KAP bildirimleri:
 {compact_disclosures(disclosures)}"""
     try:
-        response = client.models.generate_content(model=DEFAULT_MODEL, contents=prompt)
-        data = json_from_text(response.text or "")
+        text = generate_text(prompt, api_key=api_key, json_mode=True)
+        data = json_from_text(text)
         return normalize_summary(data, company, disclosures)
+    except AIProviderError:
+        raise
     except Exception:
         return fallback_summary(company, disclosures)
 
@@ -137,6 +153,9 @@ def normalize_summary(data: dict, company: CompanyMatch, disclosures: list[dict]
                 "plainText": clean_advice_language(str(item.get("plainText") or source.get("summary") or "")),
                 "url": item.get("url") or source.get("url"),
                 "category": item.get("category") or source.get("category"),
+                "reportText": source.get("report_text") or "",
+                "reportTextSource": source.get("report_text_source") or "",
+                "reportTextError": source.get("report_text_error") or "",
             }
         )
 

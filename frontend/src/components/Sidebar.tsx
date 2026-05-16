@@ -127,7 +127,7 @@ export function Sidebar(props: SidebarProps) {
 
       <div className="space-y-3">
         <label className="block space-y-1.5" htmlFor="gemini-api-key">
-          <span className="text-sm font-semibold text-ink">Gemini API</span>
+          <span className="text-sm font-semibold text-ink">AI API</span>
           <span className="block text-xs leading-5 text-ink-muted">
             Buraya yapıştırırsan bu oturumda kullanılır. Boş bırakırsan sunucu
             <code className="mx-1 rounded bg-white/70 px-1 py-0.5 text-[11px] text-ink">.env</code>
@@ -141,7 +141,7 @@ export function Sidebar(props: SidebarProps) {
             type={showKey ? "text" : "password"}
             value={props.geminiKey}
             onChange={(event) => props.setGeminiKey(event.target.value)}
-            placeholder="AIza..."
+            placeholder="API key..."
             autoComplete="off"
             spellCheck={false}
             className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-slate-400"
@@ -171,7 +171,7 @@ export function Sidebar(props: SidebarProps) {
           ) : (
             <Sparkles className="h-4 w-4 text-iris-indigo" aria-hidden />
           )}
-          Gemini bağlantısını test et
+          AI bağlantısını test et
         </Button>
         {props.geminiMessage ? (
           <p

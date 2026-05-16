@@ -26,6 +26,9 @@ export type Notification = {
   plainText: string;
   url?: string;
   category?: string;
+  reportText?: string;
+  reportTextSource?: string;
+  reportTextError?: string;
 };
 
 export type AnomalyFlag = {

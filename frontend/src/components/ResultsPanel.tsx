@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import ReactMarkdown, { type Components } from "react-markdown";
+import rehypeKatex from "rehype-katex";
 import {
   AlertCircle,
   Check,
@@ -17,6 +19,8 @@ import {
   TrendingUp,
   Volume2,
 } from "lucide-react";
+import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
 import type { ExplainResponse } from "@/lib/types";
 import { useTextToSpeech } from "@/lib/useTextToSpeech";
 import { Badge } from "@/components/ui/badge";
@@ -68,6 +72,31 @@ const LOADING_STEPS = [
   "Yapay zeka sadeleştiriyor...",
   "Neredeyse hazır...",
 ];
+
+const summaryMarkdownComponents: Components = {
+  h2: ({ children }) => <h2 className="mt-5 first:mt-0 text-lg font-semibold leading-tight text-ink sm:text-xl">{children}</h2>,
+  h3: ({ children }) => <h3 className="mt-4 first:mt-0 text-base font-semibold leading-tight text-ink">{children}</h3>,
+  p: ({ children }) => <p className="my-3 first:mt-0 last:mb-0">{children}</p>,
+  ul: ({ children }) => <ul className="my-3 list-disc space-y-1.5 pl-5">{children}</ul>,
+  ol: ({ children }) => <ol className="my-3 list-decimal space-y-1.5 pl-5">{children}</ol>,
+  li: ({ children }) => <li className="pl-1">{children}</li>,
+  strong: ({ children }) => <strong className="font-semibold text-ink">{children}</strong>,
+  table: ({ children }) => <div className="my-4 overflow-x-auto"><table className="w-full border-collapse text-sm">{children}</table></div>,
+  th: ({ children }) => <th className="border border-white/60 bg-white/55 px-3 py-2 text-left font-semibold text-ink">{children}</th>,
+  td: ({ children }) => <td className="border border-white/60 px-3 py-2">{children}</td>,
+  code: ({ children }) => <code className="rounded bg-ink/5 px-1 py-0.5 text-[0.92em]">{children}</code>,
+};
+
+const compactMarkdownComponents: Components = {
+  h2: ({ children }) => <h2 className="mt-3 first:mt-0 text-sm font-semibold text-ink">{children}</h2>,
+  h3: ({ children }) => <h3 className="mt-2 first:mt-0 text-sm font-semibold text-ink">{children}</h3>,
+  p: ({ children }) => <p className="my-2 first:mt-0 last:mb-0">{children}</p>,
+  ul: ({ children }) => <ul className="my-2 list-disc space-y-1 pl-5">{children}</ul>,
+  ol: ({ children }) => <ol className="my-2 list-decimal space-y-1 pl-5">{children}</ol>,
+  li: ({ children }) => <li className="pl-1">{children}</li>,
+  strong: ({ children }) => <strong className="font-semibold text-ink">{children}</strong>,
+  code: ({ children }) => <code className="rounded bg-ink/5 px-1 py-0.5 text-[0.92em]">{children}</code>,
+};
 
 export function ResultsPanel({ result, loading, error, onRetry, ttsRate = 0.92, geminiKey, isFavorite = false, onFavoriteToggle }: ResultsPanelProps) {
   const tts = useTextToSpeech("tr-TR", ttsRate, geminiKey);
@@ -278,14 +307,14 @@ export function ResultsPanel({ result, loading, error, onRetry, ttsRate = 0.92, 
       </header>
 
       <div className="mt-6 text-base leading-7 text-ink-soft sm:text-lg">
-        {result.summaryHtml ? (
-          <div
-            className="prose-glossary"
-            dangerouslySetInnerHTML={{ __html: result.summaryHtml }}
-          />
-        ) : (
-          result.summary
-        )}
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm, remarkMath]}
+          rehypePlugins={[rehypeKatex]}
+          skipHtml
+          components={summaryMarkdownComponents}
+        >
+          {result.summary}
+        </ReactMarkdown>
       </div>
 
       {result.anomalies && result.anomalies.length > 0 ? (
@@ -366,9 +395,16 @@ export function ResultsPanel({ result, loading, error, onRetry, ttsRate = 0.92, 
                     {item.title}
                   </h3>
                 )}
-                <p className="mt-2 text-sm leading-6 text-ink-muted">
-                  {item.plainText}
-                </p>
+                <div className="mt-2 text-sm leading-6 text-ink-muted">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm, remarkMath]}
+                    rehypePlugins={[rehypeKatex]}
+                    skipHtml
+                    components={compactMarkdownComponents}
+                  >
+                    {item.plainText}
+                  </ReactMarkdown>
+                </div>
               </div>
             </div>
           </article>

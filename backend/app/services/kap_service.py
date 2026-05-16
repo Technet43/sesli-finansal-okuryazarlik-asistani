@@ -6,6 +6,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, timedelta
 from io import BytesIO
+from urllib.parse import urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -28,6 +29,12 @@ logger = logging.getLogger(__name__)
 _COMPANY_CACHE: list[dict] = []
 _COMPANY_CACHE_TS: float = 0.0
 _COMPANY_CACHE_TTL: float = 3600.0  # 1 hour
+
+_SAFE_ATTACHMENT_EXTENSIONS = {".pdf", ".html", ".htm", ".xhtml", ".xml", ".xbrl"}
+_MAX_ATTACHMENTS_PER_DISCLOSURE = 3
+_MAX_ATTACHMENT_BYTES = 5_000_000
+_MAX_ATTACHMENT_PDF_PAGES = 10
+_MAX_REPORT_TEXT_CHARS = 6000
 
 
 def ping_kap() -> bool:
@@ -179,6 +186,12 @@ def _build_disclosure_entry(row: dict) -> dict:
     url = f"https://www.kap.org.tr/tr/Bildirim/{index}"
     subject = row.get("subject") or ""
     page_text = fetch_disclosure_page_text(url)
+    attachments = discover_attachment_links(row, url)
+    report_text, report_text_source, report_text_error = fetch_report_attachment_text(attachments)
+    if row.get("attachmentCount") and not attachments:
+        report_text_error = "KAP ek dosya bağlantısı bulunamadı."
+    elif row.get("attachmentCount") and attachments and not report_text and not report_text_error:
+        report_text_error = "KAP ek dosya içeriği okunamadı."
     return {
         "index": index,
         "publish_datetime": row.get("publishDate") or "",
@@ -193,6 +206,10 @@ def _build_disclosure_entry(row: dict) -> dict:
         "is_corrective": bool(row.get("modifyStatus")),
         "url": url,
         "page_text": page_text,
+        "attachments": attachments,
+        "report_text": report_text,
+        "report_text_source": report_text_source,
+        "report_text_error": report_text_error,
         "_order": 0,  # filled below
     }
 
@@ -270,3 +287,210 @@ def fetch_disclosure_pdf_text(index: str) -> str:
         return text[:3000]
     except Exception:
         return ""
+
+
+def discover_attachment_links(row: dict, disclosure_url: str) -> list[dict]:
+    seen: set[str] = set()
+    attachments: list[dict] = []
+
+    for attachment in _attachment_candidates_from_api_row(row):
+        normalized = _normalize_attachment(attachment, disclosure_url)
+        if normalized and normalized["url"] not in seen:
+            attachments.append(normalized)
+            seen.add(normalized["url"])
+        if len(attachments) >= _MAX_ATTACHMENTS_PER_DISCLOSURE:
+            return attachments
+
+    if attachments:
+        return attachments
+
+    for attachment in _attachment_candidates_from_html(disclosure_url):
+        normalized = _normalize_attachment(attachment, disclosure_url)
+        if normalized and normalized["url"] not in seen:
+            attachments.append(normalized)
+            seen.add(normalized["url"])
+        if len(attachments) >= _MAX_ATTACHMENTS_PER_DISCLOSURE:
+            break
+
+    return attachments
+
+
+def _attachment_candidates_from_api_row(row: dict) -> list[dict]:
+    candidates: list[dict] = []
+
+    def walk(value: object) -> None:
+        if isinstance(value, dict):
+            text = " ".join(str(value.get(key, "")) for key in value.keys())
+            if any(token in text.lower() for token in _SAFE_ATTACHMENT_EXTENSIONS):
+                candidates.append(value)
+            elif any("attach" in str(key).lower() or "file" in str(key).lower() for key in value.keys()):
+                candidates.append(value)
+            for nested in value.values():
+                walk(nested)
+        elif isinstance(value, list):
+            for item in value:
+                walk(item)
+
+    walk(row)
+    return candidates
+
+
+def _attachment_candidates_from_html(disclosure_url: str) -> list[dict]:
+    try:
+        response = _http_get_with_retry(disclosure_url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+    except requests.RequestException:
+        return []
+
+    soup = BeautifulSoup(response.text, "html.parser")
+    candidates: list[dict] = []
+    for link in soup.find_all("a", href=True):
+        href = str(link.get("href") or "")
+        label = link.get_text(" ", strip=True)
+        haystack = f"{href} {label}".lower()
+        if "/api/bildirimpdf/" in href.lower():
+            continue
+        if "/api/file/download/" not in href.lower() and not any(ext in haystack for ext in _SAFE_ATTACHMENT_EXTENSIONS):
+            continue
+        candidates.append({"url": href, "name": label})
+    return candidates
+
+
+def _normalize_attachment(raw: dict, base_url: str) -> dict | None:
+    url = _first_present(raw, ["url", "downloadUrl", "downloadURL", "fileUrl", "fileURL", "href", "link"])
+    name = _first_present(raw, ["name", "fileName", "filename", "title", "label", "text"]) or "KAP eki"
+
+    if not url:
+        for value in raw.values():
+            if isinstance(value, str) and ("kap.org.tr" in value or value.startswith("/")):
+                url = value
+                break
+    if not url:
+        return None
+
+    absolute = urljoin(base_url, str(url))
+    parsed = urlparse(absolute)
+    if parsed.scheme != "https" or parsed.netloc.lower() != "www.kap.org.tr":
+        return None
+
+    ext = _safe_extension(str(name), absolute)
+    if not ext and "/api/file/download/" not in parsed.path.lower():
+        return None
+
+    return {"name": str(name).strip() or "KAP eki", "url": absolute, "extension": ext}
+
+
+def _first_present(raw: dict, keys: list[str]) -> str:
+    for key in keys:
+        value = raw.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+def _safe_extension(name: str, url: str, content_type: str = "") -> str:
+    for source in (name, urlparse(url).path):
+        match = re.search(r"(\.[a-z0-9]+)(?:$|[?#])", source.lower())
+        if match and match.group(1) in _SAFE_ATTACHMENT_EXTENSIONS:
+            return match.group(1)
+    content_type = content_type.lower()
+    if "pdf" in content_type:
+        return ".pdf"
+    if "html" in content_type:
+        return ".html"
+    if "xml" in content_type:
+        return ".xml"
+    return ""
+
+
+def fetch_report_attachment_text(attachments: list[dict]) -> tuple[str, str, str]:
+    if not attachments:
+        return "", "", ""
+
+    chunks: list[str] = []
+    sources: list[str] = []
+    errors: list[str] = []
+
+    for attachment in attachments[:_MAX_ATTACHMENTS_PER_DISCLOSURE]:
+        if len(" ".join(chunks)) >= _MAX_REPORT_TEXT_CHARS:
+            break
+        text, error = _download_and_extract_attachment(attachment)
+        if text:
+            name = attachment.get("name") or attachment.get("url") or "KAP eki"
+            chunks.append(f"{name}: {text}")
+            sources.append(str(name))
+        elif error:
+            errors.append(error)
+
+    report_text = re.sub(r"\s+", " ", " ".join(chunks)).strip()[:_MAX_REPORT_TEXT_CHARS]
+    return report_text, ", ".join(sources), "; ".join(errors)[:500]
+
+
+def _download_and_extract_attachment(attachment: dict) -> tuple[str, str]:
+    url = str(attachment.get("url") or "")
+    if not url:
+        return "", "Ek URL bulunamadı."
+
+    try:
+        response = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"}, stream=True)
+        if response.status_code == 429:
+            return "", "KAP ek dosya indirme limiti doldu."
+        response.raise_for_status()
+        content_length = int(response.headers.get("Content-Length") or "0")
+        if content_length > _MAX_ATTACHMENT_BYTES:
+            return "", "Ek dosya çok büyük olduğu için atlandı."
+
+        data = BytesIO()
+        for chunk in response.iter_content(chunk_size=64_000):
+            if not chunk:
+                continue
+            data.write(chunk)
+            if data.tell() > _MAX_ATTACHMENT_BYTES:
+                return "", "Ek dosya boyut limiti aştığı için atlandı."
+        content = data.getvalue()
+    except requests.RequestException as exc:
+        return "", f"Ek dosya indirilemedi: {str(exc)[:120]}"
+
+    ext = _safe_extension(str(attachment.get("name") or ""), url, response.headers.get("Content-Type", ""))
+    if ext == ".pdf":
+        return _extract_pdf_attachment_text(content), ""
+    if ext in {".html", ".htm", ".xhtml"}:
+        return _extract_html_attachment_text(content), ""
+    if ext in {".xml", ".xbrl"}:
+        return _extract_xml_attachment_text(content), ""
+    return "", "Desteklenmeyen ek dosya türü atlandı."
+
+
+def _extract_pdf_attachment_text(content: bytes) -> str:
+    try:
+        reader = PdfReader(BytesIO(content))
+        pages = reader.pages[:_MAX_ATTACHMENT_PDF_PAGES]
+        text = " ".join(page.extract_text() or "" for page in pages)
+        return re.sub(r"\s+", " ", text).strip()[:_MAX_REPORT_TEXT_CHARS]
+    except Exception:
+        return ""
+
+
+def _extract_html_attachment_text(content: bytes) -> str:
+    soup = BeautifulSoup(content, "html.parser")
+    for tag in soup(["script", "style", "nav", "footer"]):
+        tag.decompose()
+    text = soup.get_text(" ", strip=True)
+    return re.sub(r"\s+", " ", text).strip()[:_MAX_REPORT_TEXT_CHARS]
+
+
+def _extract_xml_attachment_text(content: bytes) -> str:
+    raw = content.decode("utf-8", errors="ignore")
+    lines: list[str] = []
+    for match in re.finditer(r"<(?P<tag>[A-Za-z0-9_:.-]+)[^>]*>(?P<value>[^<]{1,120})</(?P=tag)>", raw):
+        tag = match.group("tag").split(":")[-1]
+        value = re.sub(r"\s+", " ", match.group("value")).strip()
+        if not value:
+            continue
+        if re.search(r"\d", value) or any(token in tag.lower() for token in ["profit", "asset", "equity", "cash", "income", "revenue", "kar", "varlik"]):
+            lines.append(f"{tag}: {value}")
+        if len(" ".join(lines)) >= _MAX_REPORT_TEXT_CHARS:
+            break
+    if not lines:
+        text = BeautifulSoup(raw, "html.parser").get_text(" ", strip=True)
+        return re.sub(r"\s+", " ", text).strip()[:_MAX_REPORT_TEXT_CHARS]
+    return " ".join(lines)[:_MAX_REPORT_TEXT_CHARS]

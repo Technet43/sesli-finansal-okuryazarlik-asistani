@@ -17,6 +17,9 @@ class Notification(BaseModel):
     plainText: str
     url: str | None = None
     category: str | None = None
+    reportText: str | None = None
+    reportTextSource: str | None = None
+    reportTextError: str | None = None
 
 
 class AnomalyFlag(BaseModel):

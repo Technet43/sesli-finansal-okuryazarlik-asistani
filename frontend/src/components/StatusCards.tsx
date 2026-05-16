@@ -7,9 +7,9 @@ type StatusCardsProps = {
 
 export function StatusCards({ status }: StatusCardsProps) {
   const kapLabel = status?.kap.label ?? "Canlı veri kaynağı";
-  const geminiLabel = status?.gemini.label ?? "Fallback modda";
+  const aiLabel = status?.gemini.label ?? "Fallback modda";
   const kapStatus = status?.kap.status ?? "live";
-  const geminiConnected = status?.gemini.status === "connected";
+  const aiConnected = status?.gemini.status === "connected";
 
   return (
     <div className="space-y-3">
@@ -25,16 +25,16 @@ export function StatusCards({ status }: StatusCardsProps) {
           icon={
             <Sparkles
               className={
-                geminiConnected
+                aiConnected
                   ? "h-4 w-4 text-iris-indigo"
                   : "h-4 w-4 text-ink-muted"
               }
               aria-hidden
             />
           }
-          title="Gemini"
-          description={geminiLabel}
-          dotColor={geminiConnected ? "bg-iris-indigo" : "bg-amber-400"}
+          title="AI"
+          description={aiLabel}
+          dotColor={aiConnected ? "bg-iris-indigo" : "bg-amber-400"}
         />
       </div>
       <p className="text-xs text-emerald-600">

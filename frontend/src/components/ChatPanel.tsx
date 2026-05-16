@@ -1,7 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import ReactMarkdown, { type Components } from "react-markdown";
+import rehypeKatex from "rehype-katex";
 import { Bot, Loader2, MessageSquare, Paperclip, RotateCcw, Send, User, X } from "lucide-react";
+import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
 import { streamChat } from "@/lib/api";
 import type { ChatMessage, ExplainResponse } from "@/lib/types";
 import { GlassCard } from "./GlassCard";
@@ -9,6 +13,7 @@ import { GlassCard } from "./GlassCard";
 type ChatPanelProps = {
   result: ExplainResponse;
   geminiKey?: string;
+  aiConnected?: boolean;
 };
 
 type AttachedFile = {
@@ -20,9 +25,16 @@ type AttachedFile = {
 
 function buildContext(result: ExplainResponse): string {
   const lines: string[] = [`Şirket: ${result.company}`, `Özet: ${result.summary}`, ""];
-  for (const n of result.notifications.slice(0, 8)) {
+  for (const n of result.notifications.slice(0, 4)) {
     lines.push(`[${n.date ?? ""}] ${n.title}`);
     if (n.plainText) lines.push(n.plainText);
+    if (n.reportText) {
+      lines.push(`Rapor eki içeriği: ${n.reportText.slice(0, 2000)}`);
+    } else if (n.reportTextError) {
+      lines.push(
+        "Rapor eki içeriği: Bu raporun ek içeriği sistem tarafından okunamadığı için yalnızca KAP bildirimi üzerinden yorum yapabiliyorum."
+      );
+    }
   }
   return lines.join("\n");
 }
@@ -34,6 +46,16 @@ const SUGGESTED = [
   "Buradaki finans terimleri ne demek?",
   "Neyi dikkatli izlemem gerekir?",
 ];
+
+const markdownComponents: Components = {
+  h2: ({ children }) => <h2 className="mt-3 first:mt-0 text-sm font-semibold text-ink">{children}</h2>,
+  p: ({ children }) => <p className="my-2 first:mt-0 last:mb-0">{children}</p>,
+  ul: ({ children }) => <ul className="my-2 list-disc space-y-1 pl-5">{children}</ul>,
+  ol: ({ children }) => <ol className="my-2 list-decimal space-y-1 pl-5">{children}</ol>,
+  li: ({ children }) => <li className="pl-1">{children}</li>,
+  strong: ({ children }) => <strong className="font-semibold text-ink">{children}</strong>,
+  code: ({ children }) => <code className="rounded bg-ink/5 px-1 py-0.5 text-[0.92em]">{children}</code>,
+};
 
 function fileSizeLabel(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -54,7 +76,7 @@ async function readFileAsB64(file: File): Promise<AttachedFile> {
   });
 }
 
-export function ChatPanel({ result, geminiKey }: ChatPanelProps) {
+export function ChatPanel({ result, geminiKey, aiConnected = false }: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -149,7 +171,7 @@ export function ChatPanel({ result, geminiKey }: ChatPanelProps) {
     }
   }, []);
 
-  const hasGemini = !!geminiKey?.trim();
+  const hasAi = aiConnected || !!geminiKey?.trim();
 
   return (
     <GlassCard className="mx-auto mt-6 w-full max-w-4xl overflow-hidden animate-fade-in">
@@ -162,7 +184,7 @@ export function ChatPanel({ result, geminiKey }: ChatPanelProps) {
           <div>
             <p className="text-sm font-semibold text-ink">{result.company} hakkında sor</p>
             <p className="text-[11px] text-ink-muted">
-              {hasGemini ? "Gemini AI · eğitici finansal Q&A" : "Gemini API key gerekli · sidebar'dan ekle"}
+              {hasAi ? "AI · eğitici finansal Q&A" : "AI API key gerekli · sidebar'dan ekle"}
             </p>
           </div>
         </div>
@@ -183,11 +205,11 @@ export function ChatPanel({ result, geminiKey }: ChatPanelProps) {
         {messages.length === 0 && (
           <div className="space-y-3">
             <p className="text-center text-xs text-ink-muted py-2">
-              {hasGemini
+              {hasAi
                 ? "Bildirimleri anlamak, terimleri öğrenmek veya bağlamını kavramak için sor."
-                : "Sohbet özelliği için sidebar'dan Gemini API key gir."}
+                : "Sohbet özelliği için sidebar'dan AI API key gir."}
             </p>
-            {hasGemini && (
+            {hasAi && (
               <div className="flex flex-wrap gap-2 justify-center">
                 {SUGGESTED.map((s) => (
                   <button
@@ -214,7 +236,20 @@ export function ChatPanel({ result, geminiKey }: ChatPanelProps) {
                 ? "bg-iris-indigo text-white rounded-tr-sm"
                 : "bg-white/70 text-ink shadow-glass-soft rounded-tl-sm"
             }`}>
-              {msg.content || (loading && i === messages.length - 1 ? (
+              {msg.content ? (
+                msg.role === "assistant" ? (
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm, remarkMath]}
+                    rehypePlugins={[rehypeKatex]}
+                    skipHtml
+                    components={markdownComponents}
+                  >
+                    {msg.content}
+                  </ReactMarkdown>
+                ) : (
+                  msg.content
+                )
+              ) : (loading && i === messages.length - 1 ? (
                 <span className="flex items-center gap-1.5 text-ink-muted">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   <span>Yazıyor...</span>
@@ -250,7 +285,7 @@ export function ChatPanel({ result, geminiKey }: ChatPanelProps) {
             className="hidden"
             onChange={(e) => void handleFileChange(e)}
           />
-          {hasGemini && (
+          {hasAi && (
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -265,13 +300,13 @@ export function ChatPanel({ result, geminiKey }: ChatPanelProps) {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={hasGemini ? `${result.company} hakkında bir şey sor veya bir kavram sor...` : "Gemini API key gerekli"}
-            disabled={!hasGemini || loading}
+            placeholder={hasAi ? `${result.company} hakkında bir şey sor veya bir kavram sor...` : "AI API key gerekli"}
+            disabled={!hasAi || loading}
             className="min-w-0 flex-1 rounded-xl border border-white/70 bg-white/70 px-4 py-2.5 text-sm text-ink outline-none placeholder:text-ink-muted/60 focus:ring-2 focus:ring-iris-indigo/40 disabled:opacity-50"
           />
           <button
             type="submit"
-            disabled={!hasGemini || !input.trim() || loading}
+            disabled={!hasAi || !input.trim() || loading}
             aria-label="Gönder"
             className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-iris-indigo text-white shadow-[0_4px_14px_-4px_rgba(124,92,255,0.6)] transition hover:opacity-90 disabled:opacity-40"
           >

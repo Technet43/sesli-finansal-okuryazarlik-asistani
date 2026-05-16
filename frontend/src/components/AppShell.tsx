@@ -151,6 +151,7 @@ export function AppShell() {
   }, [handleKeyDown]);
 
   const safeHistory = useMemo(() => history.slice(0, 6), [history]);
+  const aiConnected = status?.gemini.status === "connected";
 
   function toggleFavorite(value: string) {
     const clean = value.trim();
@@ -245,7 +246,7 @@ export function AppShell() {
       setGeminiMessage(response.message);
       void refreshStatus(geminiKey);
     } catch (err) {
-      setGeminiMessage(err instanceof Error ? err.message : "Gemini testi başarısız.");
+      setGeminiMessage(err instanceof Error ? err.message : "AI bağlantı testi başarısız.");
     } finally {
       setGeminiTesting(false);
     }
@@ -384,7 +385,7 @@ export function AppShell() {
                   onFavoriteToggle={() => result && toggleFavorite(result.company)}
                 />
                 {result && !loading && (
-                  <ChatPanel result={result} geminiKey={geminiKey} />
+                  <ChatPanel result={result} geminiKey={geminiKey} aiConnected={aiConnected} />
                 )}
               </>
             )}
