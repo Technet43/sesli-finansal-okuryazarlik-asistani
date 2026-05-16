@@ -807,14 +807,21 @@ def render_styles() -> None:
         }
 
         div[data-testid="stTextInput"] input {
-            min-height: 72px !important;
-            font-size: 1.35rem !important;
+            min-height: 64px !important;
+            font-size: 1.1rem !important;
             font-weight: 520;
             padding: 0 18px !important;
+            text-align: center !important;
+            line-height: 1.1 !important;
+            transform: translateY(-10px);
+        }
+        div[data-testid="stTextInput"] input::placeholder {
+            transform: translateY(-10px);
         }
         section[data-testid="stSidebar"] div[data-testid="stTextInput"] input {
             min-height: 48px !important;
             font-size: 1rem !important;
+            text-align: left !important;
         }
 
         /* === Liquid Glass Buttons === */
@@ -974,12 +981,13 @@ def render_styles() -> None:
         }
 
         .lead {
-            font-size: 2.4rem;
+            font-size: 2rem;
             font-weight: 650;
             line-height: 1.1;
             margin: 10px 0 8px;
             color: var(--ink);
             letter-spacing: -0.035em;
+            text-align: center;
         }
         .lead-sub {
             color: var(--muted);
@@ -1173,7 +1181,7 @@ def render_styles() -> None:
 
         @media (max-width: 760px) {
             .block-container { padding-left: 14px; padding-right: 14px; }
-            .lead { font-size: 1.6rem; }
+            .lead { font-size: 1.35rem; }
             .topbar { flex-direction: column; align-items: flex-start; }
         }
         </style>
@@ -2090,4 +2098,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
