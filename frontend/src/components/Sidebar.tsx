@@ -31,6 +31,7 @@ type SidebarProps = {
   ttsRate: number;
   setTtsRate: (value: number) => void;
   aiProvider: AiProvider;
+  effectiveAiProvider: AiProvider;
   setAiProvider: (value: AiProvider) => void;
   geminiKey: string;
   setGeminiKey: (value: string) => void;
@@ -146,6 +147,14 @@ export function Sidebar(props: SidebarProps) {
               <SelectItem value="deepseek">DeepSeek</SelectItem>
             </SelectContent>
           </Select>
+          {props.effectiveAiProvider !== props.aiProvider ? (
+            <p className="text-xs leading-5 text-amber-700">
+              Seçili sağlayıcının anahtarı boş olduğu için aktif sağlayıcı:{" "}
+              <span className="font-semibold">
+                {props.effectiveAiProvider === "deepseek" ? "DeepSeek" : "Gemini"}
+              </span>
+            </p>
+          ) : null}
         </div>
 
         <label className="block space-y-1.5" htmlFor="gemini-api-key">

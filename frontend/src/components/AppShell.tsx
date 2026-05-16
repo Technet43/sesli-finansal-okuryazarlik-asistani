@@ -56,9 +56,14 @@ export function AppShell() {
   const abortRef = useRef<AbortController | null>(null);
   const abortRefB = useRef<AbortController | null>(null);
   const statusCacheRef = useRef<{ data: SystemStatus; ts: number } | null>(null);
+  const effectiveAiProvider = useMemo<AiProvider>(() => {
+    if (aiProvider === "gemini" && !geminiKey.trim() && deepseekKey.trim()) return "deepseek";
+    if (aiProvider === "deepseek" && !deepseekKey.trim() && geminiKey.trim()) return "gemini";
+    return aiProvider;
+  }, [aiProvider, geminiKey, deepseekKey]);
   const aiOptions = useMemo(
-    () => ({ provider: aiProvider, geminiKey, deepseekKey }),
-    [aiProvider, geminiKey, deepseekKey]
+    () => ({ provider: effectiveAiProvider, geminiKey, deepseekKey }),
+    [effectiveAiProvider, geminiKey, deepseekKey]
   );
 
   function setDarkMode(value: boolean) {
@@ -73,6 +78,10 @@ export function AppShell() {
 
   function setGeminiKey(value: string) {
     setGeminiKeyState(value);
+    if (value.trim() && !deepseekKey.trim() && aiProvider === "deepseek") {
+      setAiProviderState("gemini");
+      try { window.localStorage.setItem(AI_PROVIDER_STORAGE, "gemini"); } catch { /* ignore */ }
+    }
     try {
       if (value) window.sessionStorage.setItem(GEMINI_KEY_STORAGE, value);
       else window.sessionStorage.removeItem(GEMINI_KEY_STORAGE);
@@ -81,6 +90,10 @@ export function AppShell() {
 
   function setDeepseekKey(value: string) {
     setDeepseekKeyState(value);
+    if (value.trim() && !geminiKey.trim() && aiProvider === "gemini") {
+      setAiProviderState("deepseek");
+      try { window.localStorage.setItem(AI_PROVIDER_STORAGE, "deepseek"); } catch { /* ignore */ }
+    }
     try {
       if (value) window.sessionStorage.setItem(DEEPSEEK_KEY_STORAGE, value);
       else window.sessionStorage.removeItem(DEEPSEEK_KEY_STORAGE);
@@ -335,6 +348,7 @@ export function AppShell() {
             ttsRate={ttsRate}
             setTtsRate={setTtsRate}
             aiProvider={aiProvider}
+            effectiveAiProvider={effectiveAiProvider}
             setAiProvider={setAiProvider}
             geminiKey={geminiKey}
             setGeminiKey={setGeminiKey}
@@ -430,7 +444,7 @@ export function AppShell() {
                 {comparisonChatResult && !loading && !loadingB && (
                   <ChatPanel
                     result={comparisonChatResult}
-                    aiProvider={aiProvider}
+                    aiProvider={effectiveAiProvider}
                     geminiKey={geminiKey}
                     deepseekKey={deepseekKey}
                     aiConnected={aiConnected}
@@ -452,7 +466,7 @@ export function AppShell() {
                 {result && !loading && (
                   <ChatPanel
                     result={result}
-                    aiProvider={aiProvider}
+                    aiProvider={effectiveAiProvider}
                     geminiKey={geminiKey}
                     deepseekKey={deepseekKey}
                     aiConnected={aiConnected}
