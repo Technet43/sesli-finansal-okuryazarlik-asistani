@@ -5,6 +5,7 @@ import ReactMarkdown, { type Components } from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import {
   AlertCircle,
+  BarChart3,
   Check,
   ClipboardCopy,
   Download,
@@ -356,6 +357,58 @@ export function ResultsPanel({ result, loading, error, onRetry, ttsRate = 0.92, 
           </div>
         </div>
       ) : null}
+
+      {(() => {
+        const candidate =
+          result.notifications.find(
+            (n) => n.category === "Finansal Rapor" && n.financialTable && n.financialTable.length > 0
+          ) ?? result.notifications.find((n) => n.financialTable && n.financialTable.length > 0);
+        if (!candidate || !candidate.financialTable || candidate.financialTable.length === 0) return null;
+        const rows = candidate.financialTable;
+        const maxCols = Math.min(4, Math.max(...rows.map((r) => r.values.length)));
+        return (
+          <div className={`${result.anomalies && result.anomalies.length > 0 ? "mt-6" : result.financialNumbers && result.financialNumbers.length > 0 ? "mt-6" : "mt-7"} rounded-2xl border border-white/65 bg-white/55 p-5 shadow-glass-soft backdrop-blur`}>
+            <div className="mb-4 flex items-center gap-3">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white text-iris-indigo shadow-[0_8px_22px_-14px_rgba(124,92,255,0.45)]">
+                <BarChart3 className="h-4 w-4" aria-hidden />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-semibold text-ink">Finansal Veriler (KAP raporundan)</h3>
+                <p className="text-[11px] text-ink-muted">{candidate.title}</p>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-sm tabular-nums">
+                <thead>
+                  <tr>
+                    <th className="border border-white/60 bg-white/55 px-3 py-2 text-left font-semibold text-ink">Kalem</th>
+                    {Array.from({ length: maxCols }).map((_, i) => (
+                      <th key={i} className="border border-white/60 bg-white/55 px-3 py-2 text-right font-semibold text-ink">
+                        Sütun {i + 1}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r) => (
+                    <tr key={r.label}>
+                      <td className="border border-white/60 px-3 py-2 font-medium text-ink-soft">{r.label}</td>
+                      {Array.from({ length: maxCols }).map((_, i) => (
+                        <td key={i} className="border border-white/60 px-3 py-2 text-right text-ink-soft">
+                          {r.values[i] ?? "—"}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-3 text-[11px] text-ink-muted">
+              Birim: bildirimde belirtilen para birimi (genelde bin TL). Sütunlar bildirimdeki dönem sırasını izler.
+            </p>
+          </div>
+        );
+      })()}
 
       <div className={`${result.anomalies && result.anomalies.length > 0 ? "mt-6" : result.financialNumbers && result.financialNumbers.length > 0 ? "mt-6" : "mt-7"} grid gap-3`}>
         {result.notifications.map((item, index) => (

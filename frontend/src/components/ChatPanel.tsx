@@ -24,16 +24,34 @@ type AttachedFile = {
 };
 
 function buildContext(result: ExplainResponse): string {
-  const lines: string[] = [`Şirket: ${result.company}`, `Özet: ${result.summary}`, ""];
-  for (const n of result.notifications.slice(0, 4)) {
-    lines.push(`[${n.date ?? ""}] ${n.title}`);
-    if (n.plainText) lines.push(n.plainText);
+  const lines: string[] = [`Şirket: ${result.company}`, `Özet: ${result.summary}`];
+
+  // Aggregate key financial values from all notifications so the AI sees them up front.
+  const allRows: { date: string; label: string; values: string[] }[] = [];
+  for (const n of result.notifications) {
+    if (!n.financialTable?.length) continue;
+    for (const r of n.financialTable) {
+      allRows.push({ date: n.date ?? "", label: r.label, values: r.values });
+    }
+  }
+  if (allRows.length > 0) {
+    lines.push("", "=== Anahtar Finansal Değerler (tüm bildirimlerden derlenmiş) ===");
+    for (const r of allRows.slice(0, 24)) {
+      lines.push(`[${r.date}] ${r.label}: ${r.values.join(" | ")}`);
+    }
+  }
+
+  lines.push("", "=== Bildirim Detayları ===");
+  const limit = Math.min(6, result.notifications.length);
+  for (let i = 0; i < limit; i++) {
+    const n = result.notifications[i];
+    lines.push("", `─── BİLDİRİM ${i + 1} [${n.category ?? ""}] ${n.date ?? ""} ───`);
+    lines.push(`Başlık: ${n.title}`);
+    if (n.plainText) lines.push(`Özet: ${n.plainText}`);
     if (n.reportText) {
-      lines.push(`Rapor eki içeriği: ${n.reportText.slice(0, 2000)}`);
+      lines.push(`Rapor verisi: ${n.reportText.slice(0, 4000)}`);
     } else if (n.reportTextError) {
-      lines.push(
-        "Rapor eki içeriği: Bu raporun ek içeriği sistem tarafından okunamadığı için yalnızca KAP bildirimi üzerinden yorum yapabiliyorum."
-      );
+      lines.push("Rapor verisi: Sistem ek içeriği okuyamadı; yalnızca bildirim metnine bakılabilir.");
     }
   }
   return lines.join("\n");

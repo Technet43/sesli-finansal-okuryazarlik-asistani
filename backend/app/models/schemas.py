@@ -11,6 +11,11 @@ class ExplainRequest(BaseModel):
     useDemo: bool = Field(default=False)
 
 
+class FinancialTableRow(BaseModel):
+    label: str
+    values: list[str]
+
+
 class Notification(BaseModel):
     date: str
     title: str
@@ -20,6 +25,7 @@ class Notification(BaseModel):
     reportText: str | None = None
     reportTextSource: str | None = None
     reportTextError: str | None = None
+    financialTable: list[FinancialTableRow] | None = None
 
 
 class AnomalyFlag(BaseModel):
@@ -84,7 +90,7 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     company: str = Field(..., min_length=1, max_length=120)
-    context: str = Field(default="", max_length=12000)
+    context: str = Field(default="", max_length=24000)
     history: list[ChatMessage] = Field(default_factory=list)
     message: str = Field(..., min_length=1, max_length=1000)
     file_b64: str | None = Field(default=None)

@@ -20,6 +20,11 @@ export type ExplainRequest = {
   useDemo: boolean;
 };
 
+export type FinancialTableRow = {
+  label: string;
+  values: string[];
+};
+
 export type Notification = {
   date: string;
   title: string;
@@ -29,6 +34,7 @@ export type Notification = {
   reportText?: string;
   reportTextSource?: string;
   reportTextError?: string;
+  financialTable?: FinancialTableRow[];
 };
 
 export type AnomalyFlag = {

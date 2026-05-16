@@ -63,6 +63,7 @@ def fallback_summary(company: CompanyMatch, disclosures: list[dict]) -> dict:
                 "reportText": item.get("report_text") or "",
                 "reportTextSource": item.get("report_text_source") or "",
                 "reportTextError": item.get("report_text_error") or "",
+                "financialTable": item.get("financial_table_rows") or [],
             }
         )
 
@@ -156,6 +157,7 @@ def normalize_summary(data: dict, company: CompanyMatch, disclosures: list[dict]
                 "reportText": source.get("report_text") or "",
                 "reportTextSource": source.get("report_text_source") or "",
                 "reportTextError": source.get("report_text_error") or "",
+                "financialTable": source.get("financial_table_rows") or [],
             }
         )
 
