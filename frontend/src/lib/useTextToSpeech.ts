@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
 import { fetchTTS } from "./api";
 
 export type TextToSpeechState = {
@@ -31,7 +31,7 @@ function browserSpeak(
   onEnd: () => void,
   onPause: () => void,
   onResume: () => void,
-  ref: React.MutableRefObject<SpeechSynthesisUtterance | null>
+  ref: MutableRefObject<SpeechSynthesisUtterance | null>
 ) {
   const synth = window.speechSynthesis;
   if (synth.speaking || synth.paused) synth.cancel();

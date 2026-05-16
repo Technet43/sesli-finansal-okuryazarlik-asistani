@@ -26,6 +26,7 @@ type HeroSearchProps = {
   onHistoryClick: (value: string) => void;
   favorites?: string[];
   onFavoriteToggle?: (value: string) => void;
+  geminiKey?: string;
 };
 
 export function HeroSearch({
@@ -37,8 +38,9 @@ export function HeroSearch({
   onHistoryClick,
   favorites = [],
   onFavoriteToggle,
+  geminiKey,
 }: HeroSearchProps) {
-  const speech = useSpeechRecognition("tr-TR");
+  const speech = useSpeechRecognition("tr-TR", geminiKey);
 
   useEffect(() => {
     if (speech.transcript) {
@@ -49,8 +51,12 @@ export function HeroSearch({
   const micCardLabel = !speech.isSupported
     ? "Tarayıcın mikrofon tanımayı desteklemiyor (Chrome/Edge önerilir)."
     : speech.isListening
-      ? "Dinliyorum... şirket adını söyle, bittiğinde durdur."
-      : "Sesli sor, KAP Okuryazar anlayıp açıklasın.";
+      ? speech.isGemini
+        ? "Kaydediyorum... bittiğinde durdur, Gemini Türkçe'yi tanıyacak."
+        : "Dinliyorum... şirket adını söyle, bittiğinde durdur."
+      : speech.isGemini
+        ? "Gemini AI ile sesli tanıma — tarayıcıdan çok daha iyi Türkçe."
+        : "Sesli sor, KAP Okuryazar anlayıp açıklasın.";
 
   function handleMicClick() {
     if (!speech.isSupported) return;

@@ -84,6 +84,8 @@ class ChatRequest(BaseModel):
     context: str = Field(default="", max_length=12000)
     history: list[ChatMessage] = Field(default_factory=list)
     message: str = Field(..., min_length=1, max_length=1000)
+    file_b64: str | None = Field(default=None)
+    file_mime: str | None = Field(default=None)
 
 
 class ChatResponse(BaseModel):

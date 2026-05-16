@@ -230,6 +230,47 @@ def explain(
         raise HTTPException(status_code=502, detail=f"Analiz hazırlanamadı: {str(exc)[:220]}") from exc
 
 
+def _build_chat_contents(request: ChatRequest) -> list[dict]:
+    system_prompt = f"""Sen KAP Okuryazar finansal okuryazarlık asistanısın.
+Türk bireysel yatırımcılara ve meraklılara KAP bildirimlerini anlaşılır biçimde öğretiyorsun.
+
+Görevin:
+- Bildirimlerdeki haberleri bağlamıyla açıkla: ne anlama geliyor, neden önemli, sektörde ne ifade eder.
+- Finansal kavramları (PwC denetimi, sınırlı denetim, bağımsız denetim, temettü, kar payı, sermaye artırımı vb.) Türkçe'de kısaca tanımla.
+- Bildirimlerde doğrudan yanıt bulamıyorsan genel finansal bilginle eğitici bir açıklama yap — ama bunu "Bu bildirimlerde bilgi yok, genel olarak..." diye belirt.
+- Olası etkileri (olumlu/olumsuz işaretler) eğitici dille açıkla: "Bu genellikle ... anlamına gelir."
+- Kesinlikle yatırım tavsiyesi verme; "al", "sat", "kesin yükselir/düşer" deme. Bunun yerine "yatırımcılar genellikle bunu ... olarak yorumlar" gibi eğitici çerçeve kullan.
+- Kısa ve öz ol (max 5-6 cümle). Emoji kullanma.
+- Türkçe cevap ver.
+
+Şirket: {request.company}
+{'KAP bildirim özeti (birincil kaynak):' + chr(10) + request.context[:8000] if request.context else '(Bildirim özeti yok — genel finansal bilginle cevap ver.)'}"""
+
+    contents: list[dict] = [
+        {"role": "user", "parts": [{"text": system_prompt}]},
+        {"role": "model", "parts": [{"text": "Anladım, finansal okuryazarlık odaklı sorularınızı bekliyorum."}]},
+    ]
+    for msg in request.history[-14:]:
+        role = "user" if msg.role == "user" else "model"
+        contents.append({"role": role, "parts": [{"text": msg.content}]})
+
+    # Handle file attachment
+    if request.file_b64 and request.file_mime:
+        import base64 as b64_mod
+        try:
+            file_bytes = b64_mod.b64decode(request.file_b64)
+            from google.genai import types as gtypes  # type: ignore
+            file_part = gtypes.Part.from_bytes(data=file_bytes, mime_type=request.file_mime)
+            text_part = {"text": f"[Kullanıcı bir dosya yükledi: {request.file_mime}]\n{request.message}"}
+            contents.append({"role": "user", "parts": [file_part, text_part]})
+        except Exception:
+            contents.append({"role": "user", "parts": [{"text": request.message}]})
+    else:
+        contents.append({"role": "user", "parts": [{"text": request.message}]})
+
+    return contents
+
+
 @app.post("/api/chat", response_model=ChatResponse)
 def chat(
     request: ChatRequest,
@@ -243,35 +284,95 @@ def chat(
     if client is None:
         raise HTTPException(status_code=503, detail="Sohbet için Gemini API key gerekli. Sidebar'a yapıştır.")
 
-    system_prompt = f"""Sen KAP Okuryazar finansal okuryazarlık asistanısın.
-Türk yatırımcılara KAP (Kamuyu Aydınlatma Platformu) bildirimlerini sade, dürüst Türkçe ile açıklıyorsun.
-
-Kurallar:
-- SADECE aşağıdaki bildirim özetine dayanarak cevap ver.
-- Bilgi yoksa "Bu bildirimlerde bu konuda bilgi bulamadım." de.
-- Yatırım tavsiyesi verme; "al", "sat", "kesin yükselir/düşer" deme.
-- Kısa ve net cevaplar ver (max 4-5 cümle).
-- Türkçe cevap ver.
-
-Şirket: {request.company}
-Bildirim özeti:
-{request.context[:8000] if request.context else "(Bildirim özeti sağlanmadı.)"}"""
-
-    contents: list[dict] = [
-        {"role": "user", "parts": [{"text": system_prompt}]},
-        {"role": "model", "parts": [{"text": "Anladım. Sorularınızı bekliyorum."}]},
-    ]
-    for msg in request.history[-12:]:
-        role = "user" if msg.role == "user" else "model"
-        contents.append({"role": role, "parts": [{"text": msg.content}]})
-    contents.append({"role": "user", "parts": [{"text": request.message}]})
-
+    contents = _build_chat_contents(request)
     try:
         response = client.models.generate_content(model=DEFAULT_MODEL, contents=contents)
         reply = clean_advice_language((response.text or "").strip())
-        if not reply:
-            reply = "Bir yanıt oluşturulamadı. Lütfen tekrar dene."
-        return ChatResponse(reply=reply)
+        return ChatResponse(reply=reply or "Yanıt oluşturulamadı, lütfen tekrar dene.")
     except Exception as exc:
         logger.exception("Chat error for %s", request.company)
         raise HTTPException(status_code=502, detail=f"Sohbet hatası: {str(exc)[:200]}") from exc
+
+
+@app.post("/api/chat/stream")
+def chat_stream(
+    request: ChatRequest,
+    http_request: Request,
+    x_gemini_api_key: str | None = Header(default=None, alias="X-Gemini-Api-Key"),
+):
+    _rate_limit(http_request, limit=30, window=60.0)
+    import json as _json
+    from fastapi.responses import StreamingResponse
+    from app.services.safety_service import clean_advice_language
+
+    client = get_client(api_key=x_gemini_api_key)
+    if client is None:
+        raise HTTPException(status_code=503, detail="Sohbet için Gemini API key gerekli.")
+
+    contents = _build_chat_contents(request)
+
+    def generate():
+        try:
+            stream = client.models.generate_content_stream(model=DEFAULT_MODEL, contents=contents)
+            for chunk in stream:
+                text = chunk.text or ""
+                if text:
+                    text = clean_advice_language(text)
+                    yield f"data: {_json.dumps({'text': text})}\n\n"
+        except Exception as exc:
+            yield f"data: {_json.dumps({'error': str(exc)[:200]})}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.post("/api/transcribe")
+def transcribe(
+    http_request: Request,
+    x_gemini_api_key: str | None = Header(default=None, alias="X-Gemini-Api-Key"),
+):
+    _rate_limit(http_request, limit=20, window=60.0)
+    import base64 as b64_mod
+    import asyncio
+
+    body = asyncio.get_event_loop().run_until_complete(http_request.json()) if False else None
+
+    raise HTTPException(status_code=501, detail="Use /api/transcribe with JSON body.")
+
+
+@app.post("/api/transcribe/audio")
+async def transcribe_audio(
+    http_request: Request,
+    x_gemini_api_key: str | None = Header(default=None, alias="X-Gemini-Api-Key"),
+) -> dict:
+    _rate_limit(http_request, limit=20, window=60.0)
+    import base64 as b64_mod
+
+    client = get_client(api_key=x_gemini_api_key)
+    if client is None:
+        raise HTTPException(status_code=503, detail="Transkripsiyon için Gemini API key gerekli.")
+
+    body = await http_request.json()
+    audio_b64 = body.get("audio_b64", "")
+    mime_type = body.get("mime_type", "audio/webm")
+    if not audio_b64:
+        raise HTTPException(status_code=422, detail="audio_b64 gerekli.")
+
+    try:
+        audio_bytes = b64_mod.b64decode(audio_b64)
+        from google.genai import types as gtypes  # type: ignore
+        response = client.models.generate_content(
+            model=DEFAULT_MODEL,
+            contents=[
+                gtypes.Part.from_bytes(data=audio_bytes, mime_type=mime_type),
+                "Bu ses kaydındaki Türkçe konuşmayı kelimesi kelimesine yaz. SADECE yazıyı döndür, başka hiçbir şey ekleme.",
+            ],
+        )
+        return {"text": (response.text or "").strip()}
+    except Exception as exc:
+        logger.exception("Transcription error")
+        raise HTTPException(status_code=502, detail=f"Transkripsiyon hatası: {str(exc)[:200]}") from exc

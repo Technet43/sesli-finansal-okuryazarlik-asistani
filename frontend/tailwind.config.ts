@@ -19,9 +19,9 @@ const config: Config = {
       },
       colors: {
         ink: {
-          DEFAULT: "#0b1120",
-          soft: "#1f2a44",
-          muted: "#5b667a",
+          DEFAULT: "rgb(var(--color-ink) / <alpha-value>)",
+          soft: "rgb(var(--color-ink-soft) / <alpha-value>)",
+          muted: "rgb(var(--color-ink-muted) / <alpha-value>)",
         },
         mist: "#f7f9ff",
         glass: {

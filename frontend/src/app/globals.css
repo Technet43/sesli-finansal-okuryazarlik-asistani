@@ -8,6 +8,9 @@
   --muted: 91 102 122;
   --line: 118 132 170;
   --ring: 124 92 255;
+  --color-ink: 11 17 32;
+  --color-ink-soft: 31 42 68;
+  --color-ink-muted: 91 102 122;
 }
 
 .dark {
@@ -16,6 +19,10 @@
   --muted: 148 158 178;
   --line: 60 72 100;
   --ring: 140 110 255;
+  --color-ink: 220 228 248;
+  --color-ink-soft: 175 188 218;
+  --color-ink-muted: 110 124 155;
+  color-scheme: dark;
 }
 
 * {
@@ -63,6 +70,10 @@ body::before {
     linear-gradient(110deg, transparent 0%, rgba(255, 255, 255, 0.4) 28%, transparent 48%),
     linear-gradient(330deg, transparent 0%, rgba(255, 255, 255, 0.3) 26%, transparent 46%);
   filter: saturate(1.04);
+}
+
+.dark body::before {
+  display: none;
 }
 
 button,
@@ -211,28 +222,55 @@ body.high-contrast {
   background-size: 200% 100%;
 }
 
-/* Dark mode: inputs and white surfaces */
-.dark input,
-.dark textarea,
-.dark select {
-  color-scheme: dark;
+/* Dark mode: comprehensive surface overrides */
+.dark .bg-white\/72,
+.dark .bg-white\/70,
+.dark .bg-white\/65,
+.dark .bg-white\/60,
+.dark .bg-white\/55,
+.dark .bg-white\/50,
+.dark .bg-white\/45,
+.dark .bg-white\/40,
+.dark .bg-white\/35,
+.dark .bg-white\/30 {
+  background-color: rgba(28, 33, 58, 0.72) !important;
 }
 
-.dark .bg-white\/70,
-.dark .bg-white\/55,
-.dark .bg-white\/45 {
-  background-color: rgba(30, 35, 60, 0.65) !important;
+.dark .bg-white {
+  background-color: rgba(36, 42, 72, 0.95) !important;
 }
 
 .dark .border-white\/70,
 .dark .border-white\/65,
-.dark .border-white\/60 {
-  border-color: rgba(255, 255, 255, 0.08) !important;
+.dark .border-white\/60,
+.dark .border-white\/50 {
+  border-color: rgba(255, 255, 255, 0.09) !important;
 }
 
 .dark .text-slate-400 {
-  color: rgba(148, 158, 178, 0.7) !important;
+  color: rgba(110, 124, 155, 0.9) !important;
 }
+
+.dark .shadow-glass-soft {
+  box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
+}
+
+.dark .shadow-glass {
+  box-shadow: 0 16px 48px -16px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Dark amber anomaly cards */
+.dark .border-amber-200\/70 { border-color: rgba(120, 80, 10, 0.5) !important; }
+.dark .bg-amber-50\/80 { background-color: rgba(40, 28, 5, 0.75) !important; }
+.dark .text-amber-900 { color: rgba(251, 191, 36, 0.9) !important; }
+.dark .text-amber-800 { color: rgba(217, 160, 30, 0.85) !important; }
+
+/* Dark rose error */
+.dark .bg-rose-50\/80 { background-color: rgba(40, 10, 15, 0.7) !important; }
+.dark .border-rose-300\/70 { border-color: rgba(120, 40, 50, 0.6) !important; }
+
+/* Dark emerald */
+.dark .bg-emerald-50\/80 { background-color: rgba(5, 35, 20, 0.7) !important; }
 
 /* Glossary tooltip styles */
 .prose-glossary abbr {

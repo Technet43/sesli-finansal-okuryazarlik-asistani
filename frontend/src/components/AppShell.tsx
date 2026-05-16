@@ -303,6 +303,7 @@ export function AppShell() {
                   onHistoryClick={handleHistoryClick}
                   favorites={favorites}
                   onFavoriteToggle={toggleFavorite}
+                  geminiKey={geminiKey}
                 />
               </div>
               <button
