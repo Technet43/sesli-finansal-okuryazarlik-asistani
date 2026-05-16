@@ -102,7 +102,7 @@ export function HeroSearch({
             autoComplete="off"
             value={company}
             onChange={(event) => setCompany(event.target.value)}
-            placeholder="Ziraat Bankası"
+            placeholder="Türk Hava Yolları"
             className="min-w-0 flex-1 bg-transparent text-lg font-medium text-ink outline-none placeholder:text-slate-400 sm:text-xl"
           />
           {company ? (

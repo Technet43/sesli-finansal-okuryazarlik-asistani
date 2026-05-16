@@ -12,9 +12,10 @@ import { ChatPanel } from "./ChatPanel";
 import { Sidebar } from "./Sidebar";
 
 const DEFAULT_HISTORY = [
+  "Türk Hava Yolları",
+  "THY",
   "Ziraat Bankası",
   "Koç Holding",
-  "Türk Hava Yolları",
   "Aselsan",
   "BİM",
 ];
@@ -28,7 +29,7 @@ const FAVORITES_LIMIT = 12;
 const STATUS_CACHE_TTL_MS = 30_000;
 
 export function AppShell() {
-  const [company, setCompany] = useState("Ziraat Bankası");
+  const [company, setCompany] = useState("Türk Hava Yolları");
   const [companyB, setCompanyB] = useState("");
   const [compareMode, setCompareMode] = useState(false);
   const [days, setDays] = useState(365);
