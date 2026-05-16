@@ -318,10 +318,21 @@ function RangeControl({
         aria-label={label}
       />
       {ticks?.length ? (
-        <div className="flex justify-between text-[11px] text-ink-muted">
-          {ticks.map((tick) => (
-            <span key={tick}>{tick}</span>
-          ))}
+        <div className="relative h-5 text-[11px] text-ink-muted">
+          {ticks.map((tick) => {
+            const position = ((tick - min) / (max - min)) * 100;
+            const edgeClass =
+              position <= 0 ? "translate-x-0 text-left" : position >= 100 ? "-translate-x-full text-right" : "-translate-x-1/2 text-center";
+            return (
+              <span
+                key={tick}
+                className={`absolute top-0 min-w-8 ${edgeClass}`}
+                style={{ left: `${position}%` }}
+              >
+                {tick}
+              </span>
+            );
+          })}
         </div>
       ) : null}
     </div>
