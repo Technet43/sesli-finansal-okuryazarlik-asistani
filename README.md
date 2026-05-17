@@ -6,15 +6,11 @@
 
 **KAP bildirimlerini sıradan vatandaşın anlayacağı sade Türkçe'ye çeviren, finansal tabloları yapay zekâya okutturan ve sesle etkileşim kuran bir okuryazarlık asistanı.**
 
-### 🟢 Canlı Demo
+### 🟢 [▶️ Canlı Demo'yu Aç](https://sesli-finansal-okuryazarlik-asistani-ongd5cdrx-technet4311.vercel.app/)
 
-[![Canlı Demo](https://img.shields.io/badge/▶️_Canlı_Demo-Vercel-000000?style=for-the-badge&logo=vercel)](https://sesli-finansal-okuryazarlik-asistani-ongd5cdrx-technet4311.vercel.app/)
-[![Backend API](https://img.shields.io/badge/🔌_Backend_API-Render-46E3B7?style=for-the-badge&logo=render&logoColor=white)](https://kap-okuryazar-api.onrender.com)
+[![Canlı Demo](https://img.shields.io/badge/▶️_Canlı_Demo'yu_Aç-Vercel-000000?style=for-the-badge&logo=vercel)](https://sesli-finansal-okuryazarlik-asistani-ongd5cdrx-technet4311.vercel.app/)
 
-**Frontend:** https://sesli-finansal-okuryazarlik-asistani-ongd5cdrx-technet4311.vercel.app/
-**Backend:** https://kap-okuryazar-api.onrender.com
-
-> İlk açılışta Render'ın free tier'ı backend'i uyandırırken ~30 sn beklemen gerekebilir. Sonrası akıcı.
+> İlk açılışta backend (Render free tier) uyanırken ~30 sn beklemen gerekebilir. Sonrası akıcı.
 
 ---
 
